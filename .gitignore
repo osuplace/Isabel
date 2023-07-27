@@ -1,0 +1,8 @@
+# generated from /refresh via generate_refresh.py
+/core_cog.py
+/helper.py
+/phelp.py
+
+# others
+/config.json
+/logs/

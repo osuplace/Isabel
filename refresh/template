@@ -1,0 +1,17 @@
+import importlib
+import logging
+import os
+import time
+
+from refresh import {0}
+
+last_modified = time.time()
+
+
+def use() -> {0}:
+    global last_modified
+    if os.path.getmtime({0}.__file__) > last_modified:
+        last_modified = time.time()
+        importlib.reload({0})
+        logging.getLogger("refresh").info("{0} has been reloaded")
+    return {0}
