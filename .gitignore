@@ -6,3 +6,5 @@
 # others
 /config.json
 /logs/
+/isabel.db
+/isabel.db-journal

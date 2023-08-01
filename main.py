@@ -4,7 +4,9 @@ import json
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+from typing import Optional
 
+import aiosqlite
 import discord
 from discord.ext import commands
 
@@ -27,6 +29,8 @@ class Isabel(commands.Bot):
             config = json.load(file_in)
         self.config_name = config_name
         self.config = config
+
+        self.database: Optional[aiosqlite.Connection] = None
 
         # Setup logging
         if not os.path.isdir("logs"):
@@ -52,7 +56,7 @@ class Isabel(commands.Bot):
         root_logger.setLevel(1)
 
     def auto_load(self):
-        return ['text_error_handler', 'app_error_handler'] + self.config.get('auto_load', [])
+        return ['text_error_handler', 'app_error_handler', 'database'] + self.config.get('auto_load', [])
 
     async def on_ready(self):
         app = await self.application_info()

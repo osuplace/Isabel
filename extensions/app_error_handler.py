@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from main import Isabel
 
 
-
-
 class UnhandledError(Exception):
     pass
 
@@ -31,7 +29,7 @@ class HandlerMeta(metaclass=ABCMeta):
         return issubclass(err, self.i_handle())
 
     @abstractmethod
-    async def handle(self, bot:'Isabel', interaction: Interaction, err: app_commands.AppCommandError):
+    async def handle(self, bot: 'Isabel', interaction: Interaction, err: app_commands.AppCommandError):
         pass
 
     def __str__(self):
@@ -42,11 +40,20 @@ class AnyHandler(HandlerMeta):
     def i_handle(self) -> type:
         return app_commands.AppCommandError
 
-    async def handle(self, bot:'Isabel', interaction: Interaction, err: app_commands.AppCommandError):
+    async def handle(self, bot: 'Isabel', interaction: Interaction, err: app_commands.AppCommandError):
         bot.logger.error(f"Unhandled error of type {err.__class__.__name__}")
         await interaction.response.send_message(
             "\u274c You should not see this error. Please report this.", ephemeral=True
         )
+
+
+class CheckFailureHandler(HandlerMeta):
+    def i_handle(self):
+        return app_commands.CheckFailure
+
+    async def handle(self, bot, interaction: Interaction, err: app_commands.CheckFailure):
+        await interaction.response.send_message(f"❌ Check failure. {str(err)}", ephemeral=True)
+
 
 class InvokeHandler(HandlerMeta):
     def __init__(self):
