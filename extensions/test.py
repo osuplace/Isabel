@@ -13,10 +13,12 @@ class TestCog(commands.Cog):
 
     @app_commands.command()
     async def test(self, interaction: Interaction):
-        await interaction.response.send_message('Success')
+        await interaction.response.send_message('response')
+        await interaction.followup.send('webhook', ephemeral=True)
 
     @app_commands.command()
     async def error(self, interaction: Interaction):
+        await interaction.response.send_message('This will error')
         raise Exception
 
 

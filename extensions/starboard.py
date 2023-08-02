@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Tuple
 
 import discord
 from discord import Guild, TextChannel, app_commands
@@ -49,7 +49,7 @@ class EditConfirm(discord.ui.View):
         self.next_interaction = interaction
         self.stop()
 
-    @discord.ui.button(label='Stop', style=discord.ButtonStyle.red)
+    @discord.ui.button(label='Stop the starboard', style=discord.ButtonStyle.red)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action = 'stop'
         self.next_interaction = interaction
@@ -71,7 +71,7 @@ class StarboardCog(commands.Cog):
             self,
             interaction: discord.Interaction,
             content: str
-    ) -> Optional[tuple[discord.TextChannel, discord.Interaction]]:
+    ) -> Optional[Tuple[discord.TextChannel, discord.Interaction]]:
         confirm = SetupConfirm()
         await interaction.response.send_message(
             content=content,
@@ -83,15 +83,15 @@ class StarboardCog(commands.Cog):
             return
         if confirm.selected:
             await interaction.delete_original_response()
-            return confirm.selected, confirm.next_interaction
+            return self.bot.get_channel(confirm.selected.id), confirm.next_interaction
         else:
             await interaction.delete_original_response()
-            await confirm.next_interaction.response.send_message("Cancelled", ephemeral=True)
+            await confirm.next_interaction.response.send_message("Cancelled", ephemeral=True, delete_after=15)
 
     async def edit_starboard(self, interaction: discord.Interaction):
         confirm = EditConfirm()
         await interaction.response.send_message(
-            content="__Starboard already running.__\nYou can change starboard channel or stop the starboard entirely.",
+            content="# __Starboard already running.__\nYou can change starboard channel or stop the starboard entirely.",
             view=confirm,
             ephemeral=True
         )
@@ -100,7 +100,7 @@ class StarboardCog(commands.Cog):
             return
         if confirm.action == 'cancel':
             await interaction.delete_original_response()
-            await confirm.next_interaction.response.send_message("Cancelled", ephemeral=True)
+            await confirm.next_interaction.response.send_message("Cancelled", ephemeral=True, delete_after=15)
         elif confirm.action == 'stop':
             await interaction.delete_original_response()
             await self.stop_starboard(confirm.next_interaction)
@@ -119,7 +119,7 @@ class StarboardCog(commands.Cog):
 
     async def stop_starboard(self, interaction: discord.Interaction):
         assert interaction.guild in self.guilds
-        channel = self.guilds[interaction.channel]
+        channel = self.guilds[interaction.guild]
         del self.guilds[interaction.guild]
         async with self.bot.database.cursor() as cursor:
             await cursor.execute("DELETE FROM starboard_channels WHERE channel_id = ?", (channel.id,))
@@ -127,7 +127,10 @@ class StarboardCog(commands.Cog):
 
 
     async def change_channel(self, interaction: discord.Interaction):
-        choice = await self.choose_channel(interaction, "What channel to change to?")
+        choice = await self.choose_channel(
+            interaction,
+            f"What channel to change to? Choosing nothing will change the channel to {interaction.channel.mention}"
+        )
         if choice is not None:
             next_channel, next_interaction = choice
             current_channel = self.guilds[interaction.guild]
@@ -137,6 +140,10 @@ class StarboardCog(commands.Cog):
                     "UPDATE starboard_channels SET channel_id = ? WHERE channel_id = ?",
                     (next_channel.id, current_channel.id)
                 )
+            await next_interaction.response.send_message(
+                content=f"Starboard channel changed to {next_channel.mention}",
+                ephemeral=True
+            )
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
