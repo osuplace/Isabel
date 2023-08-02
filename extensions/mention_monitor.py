@@ -19,7 +19,7 @@ class MentionMonitorCog(commands.Cog):
         if message.guild in self.guilds and message.mentions:
             mentions = ', '.join(map(lambda a: a.mention, message.mentions))
             embed = discord.Embed(
-                description=f"{message.author.mention} sent a message that mentioned {mentions}"
+                description=f"{message.author.mention} sent a message that mentioned {mentions}"[:4000]
             )
             button = discord.ui.Button(label="Jump to Message", url=message.jump_url)
             view = discord.ui.View()
