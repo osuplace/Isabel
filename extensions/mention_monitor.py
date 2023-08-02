@@ -81,5 +81,4 @@ async def setup(bot: 'Isabel'):
         for row in rows:
             channel = bot.get_channel(row[0])
             channel_dict.setdefault(channel.guild, []).append(channel)
-    mmc = MentionMonitorCog(bot, channel_dict)
-    await bot.add_cog(mmc)
+    await bot.add_cog(MentionMonitorCog(bot, channel_dict))
