@@ -12,6 +12,13 @@ if TYPE_CHECKING:
     from main import Isabel
 
 
+async def response_or_followup(interaction: Interaction, content: str):
+    if interaction.response.is_done():
+        await interaction.followup.send(content, ephemeral=True)
+    else:
+        await interaction.response.send_message(content, ephemeral=True)
+
+
 class UnhandledError(Exception):
     pass
 
@@ -40,9 +47,7 @@ class AnyHandler(HandlerMeta):
 
     async def handle(self, bot: 'Isabel', interaction: Interaction, err: app_commands.AppCommandError):
         bot.logger.error(f"Unhandled error of type {err.__class__.__name__}")
-        await interaction.response.send_message(
-            "\u274c You should not see this error. Please report this.", ephemeral=True
-        )
+        await response_or_followup(interaction, "\u274c You should not see this error. Please report this.")
 
 
 class CheckFailureHandler(HandlerMeta):
@@ -50,7 +55,7 @@ class CheckFailureHandler(HandlerMeta):
         return app_commands.CheckFailure
 
     async def handle(self, bot, interaction: Interaction, err: app_commands.CheckFailure):
-        await interaction.response.send_message(f"❌ Check failure. {str(err)}", ephemeral=True)
+        await response_or_followup(interaction, f"❌ Check failure. {str(err)}")
 
 
 class InvokeHandler(HandlerMeta):
@@ -69,7 +74,7 @@ class InvokeHandler(HandlerMeta):
     async def handle(self, bot, interaction: Interaction, err: app_commands.CommandInvokeError):
         bot.logger.error(f"CommandInvokeError {err.original.__class__.__module__}.{err.original.__class__.__name__}")
         self.logger.debug("".join(traceback.format_exception(type(err), err, err.__traceback__)))
-        await interaction.response.send_message("\u274c Error occurred while handling the command.", ephemeral=True)
+        await response_or_followup(interaction, "\u274c Error occurred while handling the command.")
 
 
 class AppErrorCog(commands.Cog):
