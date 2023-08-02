@@ -26,11 +26,16 @@ class ModerationCog(commands.Cog):
         count = 0
         messages_to_delete = []
 
-        await interaction.response.send_message(f"Deleting messages sent in the last {minutes} minutes")
+        await interaction.response.send_message(
+            content=f"Deleting messages sent in the last {minutes} minutes",
+            delete_after=15
+        )
 
         async with interaction.channel.typing():
             after = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=minutes)
             async for message in interaction.channel.history(limit=None, after=after):
+                if message.interaction and message.interaction.name == "purge":
+                    continue
                 messages_to_delete.append(message)
                 count += 1
                 if len(messages_to_delete) == 100:
