@@ -2,12 +2,10 @@ import logging
 import traceback
 from abc import ABCMeta, abstractmethod
 from logging.handlers import RotatingFileHandler
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from discord.ext import commands
 from discord import app_commands, Interaction
-
-import helper
+from discord.ext import commands
 
 if TYPE_CHECKING:
     from typing import List

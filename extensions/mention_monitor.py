@@ -25,7 +25,7 @@ class MentionMonitorCog(commands.Cog):
             view = discord.ui.View()
             view.add_item(button)
             for channel in self.guilds[message.guild]:
-                await channel.send(embed=embed, view=view)
+                await channel.send(content="-" * 15, embed=embed, view=view)
 
     async def add_channel(self, channel: discord.TextChannel):
         guild = channel.guild
