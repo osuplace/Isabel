@@ -1,5 +1,6 @@
 import asyncio
 import concurrent.futures
+import contextlib
 import inspect
 import io
 import json
@@ -108,7 +109,10 @@ class Core(commands.Cog):
         """Reload all extensions"""
         logging.info("Reloading all extensions")
         for ext in set([i.replace("extensions.", "") for i in self.bot.extensions.keys()] + self.bot.auto_load()):
-            await self.bot.reload_extension(f"extensions.{ext}")
+            try:
+                await self.bot.reload_extension(f"extensions.{ext}")
+            except commands.ExtensionNotLoaded:
+                await self.bot.load_extension(f"extensions.{ext}")
         await phelp.use().p_send(
             ctx,
             "Reloaded already loaded extensions and extensions under auto_load"
