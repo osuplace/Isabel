@@ -53,7 +53,7 @@ def source(obj):
 class Core(commands.Cog):
     def __init__(self, bot):
         self._last_result = None
-        self.bot:'Isabel' = bot
+        self.bot: 'Isabel' = bot
         self._futures = []
 
     def cog_unload(self):
@@ -153,17 +153,8 @@ class Core(commands.Cog):
         try:
             await self.bot.load_extension(f"extensions.{extension}")
             await helper.use().report_success(ctx, f"Loaded extension `{extension}`")
-        except Exception as e:
-            await phelp.use().p_send(ctx, f"Could not load extension: `{e}`")
-
-    @commands.command(hidden=True)
-    @commands.is_owner()
-    async def unload(self, ctx, *, extension: str):
-        """Unloads an extension."""
-        self.bot.logger.info(f"Unloading {extension}")
-        try:
-            await self.bot.unload_extension(f"extensions.{extension}")
         except Exception as err:
+            await phelp.use().p_send(ctx, f"Could not load extension: `{err}`")
             self.bot.logger.error(
                 "".join(
                     traceback.format_exception(
@@ -172,10 +163,24 @@ class Core(commands.Cog):
                 )
             )
 
-            await phelp.use().p_send(ctx, f"Could not unload `{extension}` -> `{err}`")
-
-        else:
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def unload(self, ctx, *, extension: str):
+        """Unloads an extension."""
+        self.bot.logger.info(f"Unloading {extension}")
+        try:
+            await self.bot.unload_extension(f"extensions.{extension}")
             await helper.use().report_success(ctx, f"Unloaded `{extension}`.")
+        except Exception as err:
+            await phelp.use().p_send(ctx, f"Could not unload `{extension}` -> `{err}`")
+            self.bot.logger.error(
+                "".join(
+                    traceback.format_exception(
+                        type(err), err.__cause__, err.__traceback__
+                    )
+                )
+            )
+
 
     @commands.command(hidden=True, name='eval', aliases=['debug', 'exec'])
     @commands.is_owner()
@@ -183,6 +188,7 @@ class Core(commands.Cog):
         """
         Evaluates a piece of code
         """
+
         class SignalAlarmError(Exception):
             pass
 
