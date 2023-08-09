@@ -572,7 +572,7 @@ async def setup(bot: 'Isabel'):
             channel = bot.get_channel(row[0])
             starboards[channel.guild] = channel
         # calculate requirements for each starboard by simulation
-        # requirements should be (MIN_STARS) * (1 + REQUIREMENTS_UP_MULTIPLIER) ^ (number of starred messages) * (1 + REQUIREMENTS_DOWN_MULTIPLIER) ^ (hours since MAX_AGE_SECONDS)
+        # requirements should be MIN_STARS * REQUIREMENTS_UP_MULTIPLIER ^ number of starred messages * REQUIREMENTS_DOWN_MULTIPLIER ^ (hours since MAX_AGE_SECONDS)
         fake_message_id = fake_max_age_snowflake()
         hours_in_max_age_seconds = MAX_AGE_SECONDS / 3600
         query = """
@@ -585,8 +585,8 @@ async def setup(bot: 'Isabel'):
         rows = await cursor.fetchall()
         for row in rows:
             channel = bot.get_channel(row[0])
-            current_requirement = math.ceil(MIN_STARS * (1 + REQUIREMENTS_UP_MULTIPLIER) ** row[1])
-            current_requirement *= math.floor((REQUIREMENTS_DOWN_MULTIPLIER) ** hours_in_max_age_seconds)
+            current_requirement = math.ceil(MIN_STARS * REQUIREMENTS_UP_MULTIPLIER ** row[1])
+            current_requirement *= math.floor(REQUIREMENTS_DOWN_MULTIPLIER ** hours_in_max_age_seconds)
             current_requirement = max(current_requirement, MIN_STARS)
             requirements[channel.guild] = current_requirement
         # count star givers for each message
