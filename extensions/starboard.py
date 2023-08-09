@@ -2,7 +2,8 @@ import asyncio
 import contextlib
 import datetime
 import math
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Set
+import re
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Set, Union
 
 import aiosqlite
 import discord
@@ -16,7 +17,17 @@ MAX_PROMOTION_SECONDS = 24 * 60 * 60
 MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 STARBOARD_INTERVAL_SECONDS = 60 * 60
 MIN_STARS = 1  # TODO: raise to 4
+REQUIREMENTS_UP_MULTIPLIER = 10 / 9
+REQUIREMENTS_DOWN_MULTIPLIER = 19 / 20
 STAR_EMOJI = '⭐'
+VALID_IMAGE_EXTENSIONS = ('png', 'jpg', 'jpeg', 'gif', 'webp')
+
+# idk where copilot got this regex from but it's a good one
+# https://gist.github.com/LittleEndu/6c7e36b834034b98b800e64a05377ff4
+IMAGE_URL_REGEX = re.compile('https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
+    VALID_IMAGE_EXTENSIONS
+) + r')(?:\?[^#]+)?(?:#[^#]+)?', re.IGNORECASE)
+
 
 
 def fake_max_promotion_snowflake():
@@ -29,6 +40,48 @@ def fake_max_age_snowflake():
     return discord.utils.time_snowflake(
         datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(seconds=MAX_AGE_SECONDS)
     )
+
+
+def make_starboard_message_kwargs(message: discord.Message, stars: int) -> Dict:
+    """
+    Makes the kwargs for a starboard message to be used in `discord.TextChannel.send` or `discord.Message.edit`
+    """
+    # TODO: what if original message has embeds?
+
+    embed = discord.Embed(description=message.content, timestamp=message.created_at)  # TODO: yellow color gradient
+    embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+    embed.set_footer(text=f"#{message.channel.name}")
+    all_embeds = [embed]
+    valid_for_image_attachments: List[str] = [
+        attachment.url
+        for attachment in message.attachments
+        if attachment.filename.endswith(
+            tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
+        )
+    ]
+    valid_for_image_attachments.extend(IMAGE_URL_REGEX.findall(message.content))
+
+    if valid_for_image_attachments:
+        embed.set_image(url=valid_for_image_attachments[0])
+        all_embeds.extend(
+            discord.Embed().set_image(url=attachment)
+            for attachment in valid_for_image_attachments[1:]
+        )
+    embed.add_field(name="Original", value=f"[Jump to message]({message.jump_url})", inline=True)
+    if message.reference:
+        embed.add_field(name="Replying to", value=f"[Jump to message]({message.reference.jump_url})", inline=True)
+
+    if message.attachments:
+        for attachment in message.attachments:
+            if len(embed.fields) < 25 and attachment.url not in valid_for_image_attachments:
+                embed.add_field(name=attachment.filename or 'Unknown file', value=f"[Download]({attachment.url})",
+                                inline=True)
+
+    return {
+        'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}",
+        'embeds': all_embeds[:10],
+        'allowed_mentions': discord.AllowedMentions.none()
+    }
 
 
 class StarredMessage:
@@ -44,6 +97,9 @@ class StarredMessage:
 
     def decrement(self):
         self.stars = max(self.stars - 1, 0)
+
+    def __repr__(self):
+        return f"<StarredMessage stars={self.stars} message={self.message}>"
 
 
 class SetupConfirm(discord.ui.View):
@@ -105,12 +161,12 @@ class StarboardCog(commands.Cog):
             bot: 'Isabel',
             starboards: Dict[discord.Guild, discord.TextChannel],
             requirements: Dict[discord.Guild, int],
-            starred_messages: Dict[int, StarredMessage]
+            starred_messages: Dict[Tuple[int, int], StarredMessage]
     ):
         self.bot = bot
         self.starboards: Dict[discord.Guild, discord.TextChannel] = starboards
         self.current_requirements: Dict[discord.Guild, int] = requirements
-        self.star_cache: Dict[int, StarredMessage] = starred_messages
+        self.star_cache: Dict[Tuple[int, int], StarredMessage] = starred_messages
         self.known_dirty_messages: Set[Tuple[int, int]] = set()  # channel_id, message_id
         self.promoted_messages: List[int] = []
 
@@ -119,23 +175,29 @@ class StarboardCog(commands.Cog):
     def cog_unload(self) -> None:
         self.hourly.cancel()
 
-    @tasks.loop(hours=1)
+    @tasks.loop(hours=1, reconnect=True)
     async def hourly(self):
+        # noinspection PyProtectedMember
+        while self.bot.database is None or self.bot.database._running is False:
+            await asyncio.sleep(1)
         self.bot.logger.info("Running hourly starboard maintenance")
+        # even though we have a while db is None loop in extension setup
         with contextlib.suppress(asyncio.CancelledError):
             # lower requirements
             for guild in self.current_requirements:
-                self.current_requirements[guild] = max(math.floor(self.current_requirements[guild] * 19 / 20),
-                                                       MIN_STARS)
+                self.current_requirements[guild] = max(
+                    math.floor(self.current_requirements[guild] * REQUIREMENTS_DOWN_MULTIPLIER),
+                    MIN_STARS
+                )
 
             # delete old stars
             async with self.bot.database.cursor() as cursor:
                 await cursor.execute("DELETE FROM starboard_reference WHERE original_message_id < ?",
                                      (fake_max_age_snowflake(),))
                 await cursor.execute("DELETE FROM star_givers WHERE message_id < ?", (fake_max_age_snowflake(),))
-            for message_id in self.star_cache:
+            for channel_id, message_id in self.star_cache:
                 if message_id < fake_max_age_snowflake():
-                    del self.star_cache[message_id]
+                    del self.star_cache[(channel_id, message_id)]
             for channel_id, message_id in self.known_dirty_messages:
                 if message_id < fake_max_age_snowflake():
                     self.known_dirty_messages.remove((channel_id, message_id))
@@ -144,10 +206,19 @@ class StarboardCog(commands.Cog):
     def swap_message_in_cache(self, new_message: discord.Message):
         if (new_message.channel.id, new_message.id) in self.known_dirty_messages:
             self.known_dirty_messages.remove((new_message.channel.id, new_message.id))
-        if new_message.id in self.star_cache:
-            current_stars = self.star_cache.get(new_message.id)
-            del self.star_cache[new_message.id]
-            self.star_cache[new_message.id] = current_stars
+        if (new_message.channel.id, new_message.id) in self.star_cache:
+            current_stars = self.star_cache.get((new_message.channel.id, new_message.id))
+            current_stars.message = new_message
+
+    async def check_message_in_starboard(self, channel_id, message_id) -> bool:
+        async with self.bot.database.cursor() as cursor:
+            query = """
+            SELECT 1 
+            FROM starboard_reference 
+            WHERE original_channel_id = ? AND original_message_id = ?
+            """
+            await cursor.execute(query, (channel_id, message_id))
+            return bool(await cursor.fetchone())
 
     async def get_message(self, channel_id, message_id, get_clean=False, use_api=True) -> Optional[discord.Message]:
         """
@@ -159,9 +230,9 @@ class StarboardCog(commands.Cog):
         :return: the message, or None if it doesn't exist
         """
         if not get_clean:
-            for cached_id in self.star_cache:
-                cached = self.star_cache[cached_id]
-                if cached.message and cached_id == message_id and cached.message.channel.id == channel_id:
+            for cached_channel_id, cached_message_id in self.star_cache:
+                cached = self.star_cache[(cached_channel_id, cached_message_id)]
+                if cached.message and cached.message.id == message_id and cached.message.channel.id == channel_id:
                     return cached.message
         for cached in self.bot.cached_messages:
             if cached.id == message_id and cached.channel.id == channel_id:
@@ -176,13 +247,6 @@ class StarboardCog(commands.Cog):
                 self.swap_message_in_cache(msg)
             return msg
 
-    async def make_starboard_message_kwargs(self, message: discord.Message, stars: int) -> Dict:
-        """
-        Makes the kwargs for a starboard message to be used in `discord.TextChannel.send` or `discord.Message.edit`
-        """
-        # TODO: add embed to starboard message
-        return {'content': f"{stars} - {message.jump_url}"}
-
     async def get_clean_message(self, channel_id, message_id) -> Optional[discord.Message]:
         msg = await self.get_message(channel_id, message_id)
         if (msg.channel.id, msg.id) in self.known_dirty_messages:
@@ -190,17 +254,19 @@ class StarboardCog(commands.Cog):
         return msg
 
     async def check_promotion(self, message: discord.Message):
+        self.bot.logger.debug(f"Checking promotion for message {message.id} in channel {message.channel.id}")
         # we arrive here only if the message is not in starboard yet
-        stars = self.star_cache[message.id].stars
+        stars = self.star_cache[(message.channel.id, message.id)].stars
         current_requirements = self.current_requirements.setdefault(message.guild, MIN_STARS)
         if stars >= current_requirements:
             await self.promote(await self.get_clean_message(message.channel.id, message.id), stars)
-            self.current_requirements[message.guild] = math.ceil(current_requirements * 10 / 9)
+            self.current_requirements[message.guild] = math.ceil(current_requirements * REQUIREMENTS_UP_MULTIPLIER)
 
     async def promote(self, message: discord.Message, stars: int):
+        self.bot.logger.debug(f"Promoting message {message.id} in channel {message.channel.id}")
         if message.id < fake_max_promotion_snowflake():
             return  # ignore old messages
-        starred = await self.starboards[message.guild].send(**await self.make_starboard_message_kwargs(message, stars))
+        starred = await self.starboards[message.guild].send(**make_starboard_message_kwargs(message, stars))
         await starred.add_reaction(STAR_EMOJI)
         async with self.bot.database.cursor() as cursor:
             query = """
@@ -212,20 +278,26 @@ class StarboardCog(commands.Cog):
 
     async def demote(self, channel_id, message_id):
         async with self.bot.database.cursor() as cursor:
-            query = """
-            DELETE FROM starboard_reference 
+            select_query = """
+            SELECT starboard_message_id, starboard_channel_id
+            FROM starboard_reference
             WHERE original_message_id = ? AND original_channel_id = ?
-            RETURNING starboard_message_id, starboard_channel_id
             """
-            await cursor.execute(query, (message_id, channel_id))
-            if cursor.rowcount != 0:
+            await cursor.execute(select_query, (message_id, channel_id))
+            row = await cursor.fetchone()
+            if row:
                 # get the starboard message ID and channel ID to delete the message from discord
-                starboard_message_id, starboard_channel_id = await cursor.fetchone()
+                starboard_message_id, starboard_channel_id = row
                 starboard_channel = self.bot.get_channel(starboard_channel_id)
                 if starboard_channel is not None:
                     starboard_message = await starboard_channel.fetch_message(starboard_message_id)
                     if starboard_message is not None:
                         await starboard_message.delete()
+                delete_query = """
+                DELETE FROM starboard_reference
+                WHERE original_message_id = ? AND original_channel_id = ?
+                """
+                await cursor.execute(delete_query, (message_id, channel_id))
             else:
                 # maybe the starboard message was deleted manually and we just need to delete the reference from db
                 query = """
@@ -237,12 +309,16 @@ class StarboardCog(commands.Cog):
                 # or maybe delete it automatically
                 # or maybe implement a blacklist
 
-    async def star_amount_changed(self, message: discord.Message, increased: bool):
-        star_cache = self.star_cache.setdefault(message.id, StarredMessage(message=message))
-        if increased:
-            star_cache.increment()
-        else:
-            star_cache.decrement()
+    async def star_amount_changed(self, message: discord.Message, increased: Optional[bool] = None):
+        self.bot.logger.debug(
+            f"Star amount changed (increased={increased}) for message {message.id} in channel {message.channel.id}"
+        )
+        star_cache = self.star_cache.setdefault((message.channel.id, message.id), StarredMessage(message=message))
+        if increased is not None:
+            if increased:
+                star_cache.increment()
+            else:
+                star_cache.decrement()
 
         async with self.bot.database.cursor() as cursor:
             query = """
@@ -255,12 +331,13 @@ class StarboardCog(commands.Cog):
             if starboard_message is not None:
                 partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
                                                          id=starboard_message[0])
-                kwargs = await self.make_starboard_message_kwargs(message, self.star_cache[message.id].stars)
+                kwargs = make_starboard_message_kwargs(message, self.star_cache[(message.channel.id, message.id)].stars)
                 await partial_message.edit(**kwargs)
             else:
                 await self.check_promotion(message)
 
     async def star(self, giver: discord.Member, message: discord.Message):
+        self.bot.logger.debug(f"Starred message {message.id} in channel {message.channel.id}")
         if message.author == giver:
             return  # can't star own message
         if giver.bot:
@@ -280,6 +357,7 @@ class StarboardCog(commands.Cog):
             await self.star_amount_changed(message, True)
 
     async def unstar(self, giver: discord.Member, message: discord.Message):
+        self.bot.logger.debug(f"Unstarred message {message.id} in channel {message.channel.id}")
         if message.id < fake_max_age_snowflake():
             return  # ignore old messages
         async with self.bot.database.cursor() as cursor:
@@ -314,7 +392,10 @@ class StarboardCog(commands.Cog):
     async def edit_starboard(self, interaction: discord.Interaction):
         confirm = EditConfirm()
         await interaction.response.send_message(
-            content="# __Starboard already running.__\nYou can change starboard channel or stop the starboard entirely.",
+            content=f"""
+# __Starboard already running in {self.starboards[interaction.guild].mention}.__
+You can change starboard channel or stop the starboard entirely.
+""",
             view=confirm,
             ephemeral=True
         )
@@ -367,7 +448,8 @@ class StarboardCog(commands.Cog):
                 ephemeral=True
             )
 
-    async def on_star_reaction(self, channel_id, message_id, giver: discord.Member, increment: bool):
+    async def on_star_reaction(self, channel_id, message_id, giver: Union[discord.Member, discord.Object],
+                               increment: bool):
         if message_id < fake_max_age_snowflake():
             return  # ignore old messages
         for channel in self.starboards.values():
@@ -392,15 +474,20 @@ class StarboardCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        self.bot.logger.debug(f"Reaction added: {payload}")
         if payload.emoji.name != STAR_EMOJI or payload.member is None:
             return
         await self.on_star_reaction(payload.channel_id, payload.message_id, payload.member, True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
-        if payload.emoji.name != STAR_EMOJI or payload.member is None:
+        self.bot.logger.debug(f"Reaction removed: {payload}")
+        # apparently member is always None here:
+        # https://discordpy.readthedocs.io/en/stable/api.html#discord.RawReactionActionEvent.member
+        # reaction_add eventually does member.bot but reaction_remove doesn't care so we can discord.Object it for db
+        if payload.emoji.name != STAR_EMOJI:
             return
-        await self.on_star_reaction(payload.channel_id, payload.message_id, payload.member, False)
+        await self.on_star_reaction(payload.channel_id, payload.message_id, discord.Object(id=payload.user_id), False)
 
     @commands.Cog.listener()
     async def on_raw_reaction_clear(self, payload: discord.RawReactionClearEvent):
@@ -419,14 +506,18 @@ class StarboardCog(commands.Cog):
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent):
         if not payload.cached_message:
             self.known_dirty_messages.add((payload.channel_id, payload.message_id))
-            # TODO: add a check to see if the message is in the starboard and the content needs to be updated
+            # check to see if the message is in the starboard and the content needs to be updated
+            if await self.check_message_in_starboard(payload.channel_id, payload.message_id):
+                await self.star_amount_changed(await self.get_clean_message(payload.channel_id, payload.message_id))
         # nothing else is done in this event because the cached message is the before variant
         # see on_message_edit where the after variant is used
 
     @commands.Cog.listener()
     async def on_message_edit(self, _, after: discord.Message):
         self.swap_message_in_cache(after)
-        # TODO: same as above, check if the message is in the starboard and the content needs to be updated
+        # same as on_raw_message_edit, but with the after variant
+        if await self.check_message_in_starboard(after.channel.id, after.id):
+            await self.star_amount_changed(after)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
@@ -449,7 +540,9 @@ class StarboardCog(commands.Cog):
 async def setup(bot: 'Isabel'):
     while not bot.database:
         await asyncio.sleep(0)
-    starboards = {}
+    starboards: Dict[discord.Guild, discord.TextChannel] = {}
+    requirements: Dict[discord.Guild, int] = {}
+    star_cache: Dict[Tuple[int, int], StarredMessage] = {}
     async with bot.database.cursor() as cursor:
         await cursor.execute("""
         CREATE TABLE IF NOT EXISTS starboard_reference (
@@ -472,14 +565,37 @@ async def setup(bot: 'Isabel'):
             UNIQUE (channel_id, message_id, giver_id)
         )
         """)
+        # get starboard channels
         await cursor.execute("SELECT * FROM starboard_channels")
         rows = await cursor.fetchall()
         for row in rows:
             channel = bot.get_channel(row[0])
             starboards[channel.guild] = channel
-        # TODO: calculate requirements for each starboard by simulation
-        # TODO: count star givers for each message
-    await bot.add_cog(StarboardCog(bot, starboards, {}, {}))
+        # calculate requirements for each starboard by simulation
+        # requirements should be (MIN_STARS) * (1 + REQUIREMENTS_UP_MULTIPLIER) ^ (number of starred messages) * (1 + REQUIREMENTS_DOWN_MULTIPLIER) ^ (hours since MAX_AGE_SECONDS)
+        fake_message_id = fake_max_age_snowflake()
+        hours_in_max_age_seconds = MAX_AGE_SECONDS / 3600
+        query = """
+        SELECT starboard_channel_id, COUNT(*) 
+        FROM starboard_reference 
+        WHERE original_message_id > ?
+        GROUP BY starboard_channel_id
+        """
+        await cursor.execute(query, (fake_message_id,))
+        rows = await cursor.fetchall()
+        for row in rows:
+            channel = bot.get_channel(row[0])
+            current_requirement = math.ceil(MIN_STARS * (1 + REQUIREMENTS_UP_MULTIPLIER) ** row[1])
+            current_requirement *= math.floor((REQUIREMENTS_DOWN_MULTIPLIER) ** hours_in_max_age_seconds)
+            current_requirement = max(current_requirement, MIN_STARS)
+            requirements[channel.guild] = current_requirement
+        # count star givers for each message
+        await cursor.execute("SELECT channel_id, message_id, COUNT(*) FROM star_givers GROUP BY channel_id, message_id")
+        rows = await cursor.fetchall()
+        for row in rows:
+            star_cache[(row[0], row[1])] = StarredMessage(row[2])
+
+    await bot.add_cog(StarboardCog(bot, starboards, requirements, star_cache))
 
 # todo:
 # [x] keep track of star givers in database (so starboard and original message stay in-sync)
@@ -487,9 +603,10 @@ async def setup(bot: 'Isabel'):
 # [x] star & unstar (reaction_add, reaction_remove, message_delete, bulk_message_delete, raw_reaction_clear)
 # [] keep track of nsfw (not necessary for osuplace)
 # [] manage spoiler content `re.compile(r'\|\|(.+?)\|\|')`
-# [] valid image formats `'png', 'jpeg', 'jpg', 'gif', 'webp'`
-# [] display all images via multiple embeds
-# [] display other attachments via fields
-# [] show jump to original message and "replying to"
+# [x] valid image formats `'png', 'jpeg', 'jpg', 'gif', 'webp'`
+# [x] display all images via multiple embeds
+# [x] display other attachments via fields
+# [x] show jump to original message and "replying to"
 # [x] keep a message cache
-# [] starboard sanity (see if deleted via `on_channel_removed` or whatever the event is)
+# [x] starboard sanity (see if deleted via `on_channel_removed` or whatever the event is)
+# [] add star reaction to messages that have a lot of non-star reactions (just so people know they can star it)

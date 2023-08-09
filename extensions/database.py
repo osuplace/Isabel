@@ -11,6 +11,8 @@ async def setup(bot: 'Isabel'):
 
 
 async def teardown(bot: 'Isabel'):
-    await bot.database.commit()
-    await bot.database.close()
+    db = bot.database
     bot.database = None
+    await db.commit()
+    await db.close()
+
