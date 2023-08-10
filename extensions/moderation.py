@@ -59,9 +59,15 @@ class ModerationCog(commands.Cog):
                 messages_to_delete.append(message)
                 count += 1
                 if len(messages_to_delete) == 100:
-                    await interaction.channel.delete_messages(messages_to_delete)
+                    await interaction.channel.delete_messages(
+                        messages_to_delete,
+                        reason=f"Purge initiated by {interaction.user.global_name} ID: {interaction.user.id}"
+                    )
                     messages_to_delete = []
-            await interaction.channel.delete_messages(messages_to_delete)
+            await interaction.channel.delete_messages(
+                messages_to_delete,
+                reason=f"Purge initiated by {interaction.user.global_name} ID: {interaction.user.id}"
+            )
 
         with contextlib.suppress(Exception):
             msg = await interaction.channel.send(f"Deleted {count} messages")
@@ -112,7 +118,7 @@ class ModerationCog(commands.Cog):
         user = user or interaction.user
         user = interaction.guild.get_member(user.id)
         if not user and not interaction.guild.chunked:
-            await interaction.guild.chunk()
+            await interaction.guild.chunk(cache=True)
             user = interaction.guild.get_member(user.id)
         embed = discord.Embed(description=f"# {user.mention}'s permissions in {interaction.guild.name}")
         embed = add_permissions_fields_to(embed, user.guild_permissions)
