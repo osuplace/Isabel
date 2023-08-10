@@ -42,6 +42,21 @@ def fake_max_age_snowflake():
     )
 
 
+def star_count_emoji(count: int) -> str:
+    index = min(math.floor(count / 5), 3)
+    return ['⭐', '🌟', '✨', '🌠'][index]
+
+
+def star_count_color(count: int) -> discord.Color:
+    gradient = [(187, 127, 31), (191, 130, 33), (196, 134, 35), (203, 139, 37), (209, 145, 39),
+                (216, 150, 41), (223, 155, 42), (229, 159, 43), (234, 163, 43), (238, 166, 43),
+                (242, 169, 43), (244, 171, 43), (246, 174, 45), (248, 177, 50), (249, 180, 55),
+                (250, 184, 62), (251, 188, 69), (252, 192, 77), (253, 196, 84), (253, 199, 89),
+                (254, 202, 94), (254, 204, 97), (255, 206, 99), (255, 207, 100), (255, 208, 100)]
+    index = min(len(gradient) - 1, count // 2)
+    return discord.Color.from_rgb(*gradient[index])
+
+
 class StarredMessage:
     def __init__(self, stars=0, message=None):
         self.stars = stars
@@ -169,10 +184,14 @@ class StarboardCog(commands.Cog):
 
         if not message.channel.permissions_for(message.guild.default_role).view_channel:
             # keep track of stars but do not expose the message content in any way
-            return {'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}"}
+            return {'content': f"{star_count_emoji(stars)} **{stars}** | {message.jump_url}"}
 
         valid_extensions = tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
-        embed = discord.Embed(description=message.content, timestamp=message.created_at)  # TODO: yellow color gradient
+        embed = discord.Embed(
+            description=message.content,
+            timestamp=message.created_at,
+            color=star_count_color(stars)
+        )
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
         embed.set_footer(text=f"Next at {self.current_requirements[message.guild]}{STAR_EMOJI}")
         all_embeds = [embed]
@@ -334,7 +353,8 @@ class StarboardCog(commands.Cog):
             if starboard_message is not None:
                 partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
                                                          id=starboard_message[0])
-                kwargs = self.make_starboard_message_kwargs(message, self.star_cache[(message.channel.id, message.id)].stars)
+                kwargs = self.make_starboard_message_kwargs(message,
+                                                            self.star_cache[(message.channel.id, message.id)].stars)
                 await partial_message.edit(**kwargs)
             else:
                 await self.check_promotion(message)
