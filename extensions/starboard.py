@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 MAX_PROMOTION_SECONDS = 24 * 60 * 60
 MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 STARBOARD_INTERVAL_SECONDS = 60 * 60
-MIN_STARS = 2  # TODO: raise to 4
+MIN_STARS = 2  # set to 0 for testing  # TODO: raise to 4
 REQUIREMENTS_UP_MULTIPLIER = 10 / 9
 REQUIREMENTS_DOWN_MULTIPLIER = 19 / 20
 STAR_EMOJI = '⭐'
@@ -25,9 +25,9 @@ VALID_IMAGE_EXTENSIONS = ('png', 'jpg', 'jpeg', 'gif', 'webp')
 # idk where copilot got this regex from but it's a good one
 # https://gist.github.com/LittleEndu/6c7e36b834034b98b800e64a05377ff4
 # noinspection RegExpRedundantEscape
-IMAGE_URL_REGEX = re.compile(r'https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
+IMAGE_URL_REGEX = re.compile(r'(?:\|\|)?<?(https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
     VALID_IMAGE_EXTENSIONS
-) + r')(?:\?[^#]+)?(?:#[^#]+)?', re.IGNORECASE)
+) + r')(?:\?[^#]+)?(?:#[^#]+)?)>?(?:\|\|)?', re.IGNORECASE)
 
 
 def fake_max_promotion_snowflake():
@@ -43,7 +43,7 @@ def fake_max_age_snowflake():
 
 
 def star_count_emoji(count: int) -> str:
-    index = max(0, min((count - 3) // 5, 3))
+    index = max(0, min((count - 3) // 6, 3))
     return ['⭐', '🌟', '💫', '✨'][index]
 
 
@@ -183,47 +183,72 @@ class StarboardCog(commands.Cog):
         # TODO: what if original message has embeds?
 
         rv_content = f"{star_count_emoji(stars)} **{stars}** | {message.jump_url}"
+        rv_color = star_count_color(stars)
 
-        if not message.channel.permissions_for(message.guild.default_role).view_channel:
+        if any([
+            not message.channel.permissions_for(message.guild.default_role).view_channel,
+            message.channel.is_nsfw() and self.starboards[message.guild].is_nsfw() is False
+        ]):
             # keep track of stars but do not expose the message content in any way
             return {'content': rv_content}
 
         valid_extensions = tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
         embed = discord.Embed(
             description=message.content,
-            timestamp=message.created_at,
-            color=star_count_color(stars)
+            color=rv_color
         )
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
-        embed.set_footer(text=f"Next at {self.current_requirements[message.guild]}{STAR_EMOJI}")
         all_embeds = [embed]
+
+        # add all valid image attachments that are not spoilers
         valid_for_image_attachments: List[str] = [
             attachment.url
             for attachment in message.attachments
-            if attachment.filename.endswith(valid_extensions)
+            if attachment.filename.endswith(valid_extensions) and not attachment.is_spoiler()
         ]
-        valid_for_image_attachments.extend(IMAGE_URL_REGEX.findall(message.content))
+        # add all valid image URLs that are not spoilers (whole match and group 1 are the same)
+        # group 1 is the URL without the <> or || so if group 1 is different from the whole match, the URL is a spoiler
+        valid_for_image_attachments.extend(
+            match[1]
+            for match in IMAGE_URL_REGEX.finditer(message.content)
+            if match[0] == match[1]
+        )
+        # finally add all valid stickers (there should only be one but just in case)
         valid_for_image_attachments.extend(sticker.url for sticker in message.stickers)
 
         if valid_for_image_attachments:
             embed.set_image(url=valid_for_image_attachments[0])
             all_embeds.extend(
-                discord.Embed().set_image(url=attachment)
+                discord.Embed(color=rv_color).set_image(url=attachment)
                 for attachment in valid_for_image_attachments[1:]
             )
-        embed.add_field(name="Original", value=f"[Jump to message]({message.jump_url})", inline=True)
+        embed.add_field(name="Original", value=f"[Jump to message]({message.jump_url})", inline=False)
         if message.reference:
-            embed.add_field(name="Replying to", value=f"[Jump to message]({message.reference.jump_url})", inline=True)
+            res = message.reference.resolved
+            name = res.author.display_name if isinstance(res, discord.Message) else 'Jump to message'
+            embed.add_field(
+                name="Replying to",
+                value=f"[{name}]({message.reference.jump_url})",
+                inline=False
+            )
 
         if message.attachments:
             for attachment in message.attachments:
                 if len(embed.fields) < 25 and attachment.url not in valid_for_image_attachments:
-                    embed.add_field(name=attachment.filename or 'Unknown file', value=f"[Download]({attachment.url})",
-                                    inline=True)
+                    name = attachment.filename or 'Unknown file'  # should never happen but just in case
+                    embed.add_field(
+                        name='Open attachment',
+                        value=f"[{name}]({attachment.url})",
+                        inline=False
+                    )
+
+        all_embeds = all_embeds[:10]  # max 10 embeds
+        all_embeds[-1].set_footer(text=f"Next at {self.current_requirements[message.guild]}{STAR_EMOJI}")
+        all_embeds[-1].timestamp = message.created_at
 
         return {
             'content': rv_content,
-            'embeds': all_embeds[:10],
+            'embeds': all_embeds,
             'allowed_mentions': discord.AllowedMentions.none()
         }
 
@@ -628,8 +653,8 @@ async def setup(bot: 'Isabel'):
 # [x] keep track of star givers in database (so starboard and original message stay in-sync)
 # [x] can't star own messages / can't star messages twice (can't give more than 1 star)
 # [x] star & unstar (reaction_add, reaction_remove, message_delete, bulk_message_delete, raw_reaction_clear)
-# [] keep track of nsfw (not necessary for osuplace)
-# [] manage spoiler content `re.compile(r'\|\|(.+?)\|\|')`
+# [x] keep track of nsfw (not necessary for osuplace)
+# [x] manage spoiler content `re.compile(r'\|\|(.+?)\|\|')`
 # [x] valid image formats `'png', 'jpeg', 'jpg', 'gif', 'webp'`
 # [x] display all images via multiple embeds
 # [x] display other attachments via fields
