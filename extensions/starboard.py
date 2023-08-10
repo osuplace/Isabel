@@ -42,52 +42,6 @@ def fake_max_age_snowflake():
     )
 
 
-def make_starboard_message_kwargs(message: discord.Message, stars: int) -> Dict:
-    """
-    Makes the kwargs for a starboard message to be used in `discord.TextChannel.send` or `discord.Message.edit`
-    """
-    # TODO: what if original message has embeds?
-
-    if not message.channel.permissions_for(message.guild.default_role).view_channel:
-        # keep track of stars but do not expose the message content in any way
-        return {'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}"}
-
-    valid_extensions = tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
-    embed = discord.Embed(description=message.content, timestamp=message.created_at)  # TODO: yellow color gradient
-    embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
-    embed.set_footer(text=f"#{message.channel.name}")
-    all_embeds = [embed]
-    valid_for_image_attachments: List[str] = [
-        attachment.url
-        for attachment in message.attachments
-        if attachment.filename.endswith(valid_extensions)
-    ]
-    valid_for_image_attachments.extend(IMAGE_URL_REGEX.findall(message.content))
-    valid_for_image_attachments.extend(sticker.url for sticker in message.stickers)
-
-    if valid_for_image_attachments:
-        embed.set_image(url=valid_for_image_attachments[0])
-        all_embeds.extend(
-            discord.Embed().set_image(url=attachment)
-            for attachment in valid_for_image_attachments[1:]
-        )
-    embed.add_field(name="Original", value=f"[Jump to message]({message.jump_url})", inline=True)
-    if message.reference:
-        embed.add_field(name="Replying to", value=f"[Jump to message]({message.reference.jump_url})", inline=True)
-
-    if message.attachments:
-        for attachment in message.attachments:
-            if len(embed.fields) < 25 and attachment.url not in valid_for_image_attachments:
-                embed.add_field(name=attachment.filename or 'Unknown file', value=f"[Download]({attachment.url})",
-                                inline=True)
-
-    return {
-        'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}",
-        'embeds': all_embeds[:10],
-        'allowed_mentions': discord.AllowedMentions.none()
-    }
-
-
 class StarredMessage:
     def __init__(self, stars=0, message=None):
         self.stars = stars
@@ -207,6 +161,51 @@ class StarboardCog(commands.Cog):
                     self.known_dirty_messages.remove((channel_id, message_id))
             await self.bot.database.commit()
 
+    def make_starboard_message_kwargs(self, message: discord.Message, stars: int) -> Dict:
+        """
+        Makes the kwargs for a starboard message to be used in `discord.TextChannel.send` or `discord.Message.edit`
+        """
+        # TODO: what if original message has embeds?
+
+        if not message.channel.permissions_for(message.guild.default_role).view_channel:
+            # keep track of stars but do not expose the message content in any way
+            return {'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}"}
+
+        valid_extensions = tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
+        embed = discord.Embed(description=message.content, timestamp=message.created_at)  # TODO: yellow color gradient
+        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+        embed.set_footer(text=f"Next at {self.current_requirements[message.guild]}{STAR_EMOJI}")
+        all_embeds = [embed]
+        valid_for_image_attachments: List[str] = [
+            attachment.url
+            for attachment in message.attachments
+            if attachment.filename.endswith(valid_extensions)
+        ]
+        valid_for_image_attachments.extend(IMAGE_URL_REGEX.findall(message.content))
+        valid_for_image_attachments.extend(sticker.url for sticker in message.stickers)
+
+        if valid_for_image_attachments:
+            embed.set_image(url=valid_for_image_attachments[0])
+            all_embeds.extend(
+                discord.Embed().set_image(url=attachment)
+                for attachment in valid_for_image_attachments[1:]
+            )
+        embed.add_field(name="Original", value=f"[Jump to message]({message.jump_url})", inline=True)
+        if message.reference:
+            embed.add_field(name="Replying to", value=f"[Jump to message]({message.reference.jump_url})", inline=True)
+
+        if message.attachments:
+            for attachment in message.attachments:
+                if len(embed.fields) < 25 and attachment.url not in valid_for_image_attachments:
+                    embed.add_field(name=attachment.filename or 'Unknown file', value=f"[Download]({attachment.url})",
+                                    inline=True)
+
+        return {
+            'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}",
+            'embeds': all_embeds[:10],
+            'allowed_mentions': discord.AllowedMentions.none()
+        }
+
     def swap_message_in_cache(self, new_message: discord.Message):
         if (new_message.channel.id, new_message.id) in self.known_dirty_messages:
             self.known_dirty_messages.remove((new_message.channel.id, new_message.id))
@@ -263,14 +262,14 @@ class StarboardCog(commands.Cog):
         stars = self.star_cache[(message.channel.id, message.id)].stars
         current_requirements = self.current_requirements.setdefault(message.guild, MIN_STARS)
         if stars >= current_requirements:
-            await self.promote(await self.get_clean_message(message.channel.id, message.id), stars)
             self.current_requirements[message.guild] = math.ceil(current_requirements * REQUIREMENTS_UP_MULTIPLIER)
+            await self.promote(await self.get_clean_message(message.channel.id, message.id), stars)
 
     async def promote(self, message: discord.Message, stars: int):
         self.bot.logger.debug(f"Promoting message {message.id} in channel {message.channel.id}")
         if message.id < fake_max_promotion_snowflake():
             return  # ignore old messages
-        starred = await self.starboards[message.guild].send(**make_starboard_message_kwargs(message, stars))
+        starred = await self.starboards[message.guild].send(**self.make_starboard_message_kwargs(message, stars))
         await starred.add_reaction(STAR_EMOJI)
         async with self.bot.database.cursor() as cursor:
             query = """
@@ -335,7 +334,7 @@ class StarboardCog(commands.Cog):
             if starboard_message is not None:
                 partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
                                                          id=starboard_message[0])
-                kwargs = make_starboard_message_kwargs(message, self.star_cache[(message.channel.id, message.id)].stars)
+                kwargs = self.make_starboard_message_kwargs(message, self.star_cache[(message.channel.id, message.id)].stars)
                 await partial_message.edit(**kwargs)
             else:
                 await self.check_promotion(message)
@@ -348,6 +347,8 @@ class StarboardCog(commands.Cog):
             return  # ignore bots
         if message.id < fake_max_age_snowflake():
             return  # ignore old messages
+        if giver.guild not in self.starboards:
+            return  # ignore messages from guilds without starboard
         stars_increased = True
         try:
             async with self.bot.database.cursor() as cursor:
