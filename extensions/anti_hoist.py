@@ -22,7 +22,7 @@ class AntiHoistCog(commands.Cog):
         global_tried = False
         candidate_name = member.display_name.replace('/u/', '')
         while candidate_name < 'A':
-            while candidate_name < 'A':
+            while candidate_name and candidate_name < 'A':
                 first_char = candidate_name[1]
                 candidate_name = candidate_name[1:]
                 if candidate_name.endswith(first_char):
