@@ -44,7 +44,7 @@ def fake_max_age_snowflake():
 
 def star_count_emoji(count: int) -> str:
     index = max(0, min((count - 3) // 5, 3))
-    return ['⭐', '🌟', '✨', '💫'][index]
+    return ['⭐', '🌟', '💫', '✨'][index]
 
 
 def star_count_color(count: int) -> discord.Color:
