@@ -14,18 +14,13 @@ class AntiHoistCog(commands.Cog):
         self.bot = bot
         self.guilds = guilds
 
-    @commands.Cog.listener()
-    async def on_guild_remove(self, guild):
-        await self.remove_guild(guild)
-
-    @commands.Cog.listener()
-    async def on_member_update(self, _, after: discord.Member):
-        if after.guild not in self.guilds:
+    async def remove_hoisted_name(self, member: discord.Member):
+        if member.guild not in self.guilds:
             return
-        if after.guild_permissions.manage_messages:
+        if member.guild_permissions.manage_messages:
             return
         global_tried = False
-        candidate_name = after.display_name
+        candidate_name = member.display_name.replace('/u/', '')
         while candidate_name < 'A':
             while candidate_name < 'A':
                 first_char = candidate_name[1]
@@ -33,10 +28,22 @@ class AntiHoistCog(commands.Cog):
                 if candidate_name.endswith(first_char):
                     candidate_name = candidate_name[:-1]
             if not candidate_name:
-                candidate_name = "no hoisting" if global_tried else (after.global_name or "no hoisting")
+                candidate_name = "no hoisting" if global_tried else (member.global_name or "no hoisting")
                 global_tried = True
-        if candidate_name != after.display_name:
-            await after.edit(nick=candidate_name, reason="Removing hoisted display name")
+        if candidate_name != member.display_name:
+            await member.edit(nick=candidate_name, reason="Removing hoisted display name")
+
+    @commands.Cog.listener()
+    async def on_guild_remove(self, guild):
+        await self.remove_guild(guild)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, _, member: discord.Member):
+        await self.remove_hoisted_name(member)
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        await self.remove_hoisted_name(member)
 
     async def add_guild(self, guild: discord.Guild):
         if guild not in self.guilds:
