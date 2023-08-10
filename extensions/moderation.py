@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Union
 
 import discord
 from discord import app_commands
@@ -9,6 +9,26 @@ from discord.ext import commands
 
 if TYPE_CHECKING:
     from main import Isabel
+
+
+def add_permissions_fields_to(embed: discord.Embed, permissions: discord.Permissions):
+    all_permissions: Dict[str, bool] = {
+        k.replace('_', ' ').capitalize(): v for k, v in permissions
+    }
+    all_permissions['Bake a cake'] = False
+    if len(all_permissions) % 2 != 0:
+        all_permissions['Sing a lullaby'] = False
+
+    field0 = ""
+    field1 = ""
+    for i, (k, v) in enumerate(all_permissions.items()):
+        if i % 2 == 0:
+            field0 += f"{'🟢' if v else '🔴'} {k}\n"
+        else:
+            field1 += f"{'🟢' if v else '🔴'} {k}\n"
+    embed.add_field(name="\u200b", value=field0)
+    embed.add_field(name="\u200b", value=field1)
+    return embed
 
 
 class ModerationCog(commands.Cog):
@@ -47,6 +67,56 @@ class ModerationCog(commands.Cog):
             msg = await interaction.channel.send(f"Deleted {count} messages")
             await asyncio.sleep(15)
             await msg.delete()
+
+    @app_commands.command(description="Gets the avatar URL of a user")
+    async def avatar(self, interaction: discord.Interaction, user: discord.User = None):
+        user = user or interaction.user
+        embed = discord.Embed(description=f"# {user.mention}'s Avatar")
+        embed.set_image(url=user.avatar.url)
+        embed.add_field(name="Avatar URL", value=user.avatar.url)
+
+        embeds = [embed]
+
+        if interaction.guild:
+            if member := interaction.guild.get_member(user.id):
+                if member.guild_avatar:
+                    embed = discord.Embed(description=f"# {member.mention}'s Server Avatar")
+                    embed.set_image(url=member.guild_avatar.url)
+                    embed.add_field(name="Avatar URL", value=member.guild_avatar.url)
+                    embeds.append(embed)
+
+        await interaction.response.send_message(embeds=embeds)
+
+    @app_commands.command(description="Gets the permissions someone has in a channel")
+    async def permsin(
+            self,
+            interaction: discord.Interaction,
+            channel: Union[
+                discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel, discord.StageChannel, discord.ForumChannel] = None,
+            user: discord.User = None
+    ):
+        if not interaction.guild:
+            raise app_commands.NoPrivateMessage()
+        channel = channel or interaction.channel
+        user = user or interaction.user
+        user = interaction.guild.get_member(user.id) or user
+        permissions = channel.permissions_for(user)
+        embed = discord.Embed(description=f"# {user.mention}'s permissions in {channel.mention}")
+        embed = add_permissions_fields_to(embed, permissions)
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(description="Gets the permissions someone globally in the server")
+    async def permsfor(self, interaction: discord.Interaction, user: discord.User = None):
+        if not interaction.guild:
+            raise app_commands.NoPrivateMessage()
+        user = user or interaction.user
+        user = interaction.guild.get_member(user.id)
+        if not user and not interaction.guild.chunked:
+            await interaction.guild.chunk()
+            user = interaction.guild.get_member(user.id)
+        embed = discord.Embed(description=f"# {user.mention}'s permissions in {interaction.guild.name}")
+        embed = add_permissions_fields_to(embed, user.guild_permissions)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):
