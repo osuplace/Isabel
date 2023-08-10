@@ -43,8 +43,8 @@ def fake_max_age_snowflake():
 
 
 def star_count_emoji(count: int) -> str:
-    index = min(math.floor(count / 5), 3)
-    return ['⭐', '🌟', '✨', '🌠'][index]
+    index = max(0, min((count - 3) // 5, 3))
+    return ['⭐', '🌟', '✨', '💫'][index]
 
 
 def star_count_color(count: int) -> discord.Color:
@@ -182,9 +182,11 @@ class StarboardCog(commands.Cog):
         """
         # TODO: what if original message has embeds?
 
+        rv_content = f"{star_count_emoji(stars)} **{stars}** | {message.jump_url}"
+
         if not message.channel.permissions_for(message.guild.default_role).view_channel:
             # keep track of stars but do not expose the message content in any way
-            return {'content': f"{star_count_emoji(stars)} **{stars}** | {message.jump_url}"}
+            return {'content': rv_content}
 
         valid_extensions = tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
         embed = discord.Embed(
@@ -220,7 +222,7 @@ class StarboardCog(commands.Cog):
                                     inline=True)
 
         return {
-            'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}",
+            'content': rv_content,
             'embeds': all_embeds[:10],
             'allowed_mentions': discord.AllowedMentions.none()
         }
