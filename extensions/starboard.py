@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 MAX_PROMOTION_SECONDS = 24 * 60 * 60
 MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 STARBOARD_INTERVAL_SECONDS = 60 * 60
-MIN_STARS = 1  # TODO: raise to 4
+MIN_STARS = 2  # TODO: raise to 4
 REQUIREMENTS_UP_MULTIPLIER = 10 / 9
 REQUIREMENTS_DOWN_MULTIPLIER = 19 / 20
 STAR_EMOJI = '⭐'
@@ -24,10 +24,10 @@ VALID_IMAGE_EXTENSIONS = ('png', 'jpg', 'jpeg', 'gif', 'webp')
 
 # idk where copilot got this regex from but it's a good one
 # https://gist.github.com/LittleEndu/6c7e36b834034b98b800e64a05377ff4
-IMAGE_URL_REGEX = re.compile('https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
+# noinspection RegExpRedundantEscape
+IMAGE_URL_REGEX = re.compile(r'https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
     VALID_IMAGE_EXTENSIONS
 ) + r')(?:\?[^#]+)?(?:#[^#]+)?', re.IGNORECASE)
-
 
 
 def fake_max_promotion_snowflake():
@@ -48,6 +48,11 @@ def make_starboard_message_kwargs(message: discord.Message, stars: int) -> Dict:
     """
     # TODO: what if original message has embeds?
 
+    if not message.channel.permissions_for(message.guild.default_role).view_channel:
+        # keep track of stars but do not expose the message content in any way
+        return {'content': f"{STAR_EMOJI} **{stars}** | {message.jump_url}"}
+
+    valid_extensions = tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
     embed = discord.Embed(description=message.content, timestamp=message.created_at)  # TODO: yellow color gradient
     embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
     embed.set_footer(text=f"#{message.channel.name}")
@@ -55,11 +60,10 @@ def make_starboard_message_kwargs(message: discord.Message, stars: int) -> Dict:
     valid_for_image_attachments: List[str] = [
         attachment.url
         for attachment in message.attachments
-        if attachment.filename.endswith(
-            tuple(f'.{ext}' for ext in VALID_IMAGE_EXTENSIONS)
-        )
+        if attachment.filename.endswith(valid_extensions)
     ]
     valid_for_image_attachments.extend(IMAGE_URL_REGEX.findall(message.content))
+    valid_for_image_attachments.extend(sticker.url for sticker in message.stickers)
 
     if valid_for_image_attachments:
         embed.set_image(url=valid_for_image_attachments[0])
