@@ -169,7 +169,6 @@ class LogoBuildersCog(commands.Cog):
             await self.lite_moderation_channel.send(embed=embed)
         # on_member_update (nick)
         elif entry.action == discord.AuditLogAction.member_update and hasattr(entry.after, 'nick'):
-            return  # TODO: remove (only used for testing)
             their = 'their' if entry.target == entry.user else f"{entry.target.mention}'s"
             actioned = "changed" if entry.before.nick else "set"
             actioned = actioned if entry.after.nick else "removed"
