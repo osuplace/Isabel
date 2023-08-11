@@ -9,6 +9,10 @@ if TYPE_CHECKING:
     from main import Isabel
 
 
+def discord_sort(name) -> bool:
+    return name < 'A' or name[0] in '^[]_`'
+
+
 class AntiHoistCog(commands.Cog):
     def __init__(self, bot: 'Isabel', guilds: List[discord.Guild]):
         self.bot = bot
@@ -21,12 +25,9 @@ class AntiHoistCog(commands.Cog):
             return
         global_tried = False
         candidate_name = member.display_name.replace('/u/', '')
-        while candidate_name < 'A':
-            while candidate_name and candidate_name < 'A':
-                first_char = candidate_name[1]
+        while discord_sort(candidate_name):
+            while candidate_name and discord_sort(candidate_name):
                 candidate_name = candidate_name[1:]
-                if candidate_name.endswith(first_char):
-                    candidate_name = candidate_name[:-1]
             if not candidate_name:
                 candidate_name = "no hoisting" if global_tried else (member.global_name or "no hoisting")
                 global_tried = True
