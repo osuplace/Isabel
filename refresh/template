@@ -8,7 +8,7 @@ from refresh import {0}
 last_modified = time.time()
 
 
-def use() -> {0}:
+def use():
     global last_modified
     if os.path.getmtime({0}.__file__) > last_modified:
         last_modified = time.time()

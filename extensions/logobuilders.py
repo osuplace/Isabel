@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING
+import logging
+from typing import TYPE_CHECKING, Optional, Union
 
 import discord
 from discord.ext import commands
@@ -7,17 +8,86 @@ if TYPE_CHECKING:
     from main import Isabel
 
 OSU_LOGO_BUILDERS = 297657542572507137
+ISABEL_ID = 1134144074987864186
+
+
+def get_message_delete_embed(entry: discord.AuditLogEntry):
+    channel = f"<#{entry.extra.channel.id}>"
+    embed = discord.Embed(
+        description=f"❌ {entry.user.mention} deleted {entry.extra.count} <@{entry.target.id}>'s messages in {channel}",
+        color=discord.Color.dark_red()
+    )
+    embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
+    return embed
+
+
+class RoleUpdateHandler:
+    def __init__(self, entry: discord.AuditLogEntry):
+        if entry.action != discord.AuditLogAction.member_role_update:
+            raise ValueError(
+                f"RoleUpdateHandler expected {discord.AuditLogAction.member_role_update}, got {entry.action}"
+            )
+        self.user: discord.Member = entry.user
+        self.target: Union[discord.Member, discord.Object] = entry.target
+        self.added: set[int] = {i.id for i in entry.after.roles}
+        self.removed: set[int] = {i.id for i in entry.before.roles}
+        self.messages: list[discord.Message] = []
+
+        self.embed = self.create_embed()
+
+    def create_embed(self):
+        their = 'their' if self.target == self.user else f"{self.target.mention}'s"
+        embed = discord.Embed(
+            description=f"👥 {self.user.mention} changed {their} roles",
+            color=discord.Color.lighter_grey()
+        )
+        if self.added:
+            embed.add_field(
+                name="🆕 Added",
+                value=', '.join(f"<@&{r}>" for r in self.added)
+            )
+        if self.removed:
+            embed.add_field(
+                name="🚮 Removed",
+                value=', '.join(f"<@&{r}>" for r in self.removed)
+            )
+        embed.set_author(name=self.user, icon_url=self.user.avatar.url)
+        return embed
+
+    async def update(self, entry):
+        if entry.action != discord.AuditLogAction.member_role_update:
+            raise ValueError(
+                f"RoleUpdateHandler expected {discord.AuditLogAction.member_role_update}, got {entry.action}"
+            )
+        # add the new roles to the list
+        self.added = self.added.union([i.id for i in entry.after.roles])
+        self.removed = self.removed.union([i.id for i in entry.before.roles])
+        # remove the old roles from the list (added then removed or removed then added)
+        in_both = self.added.intersection(self.removed)
+        self.added = self.added.difference(in_both)
+        self.removed = self.removed.difference(in_both)
+        # update the embed
+        embed = self.create_embed()
+        if embed.to_dict() == self.embed.to_dict():
+            logging.info("embeds are the same")
+            return
+        self.embed = embed
+        # edit messages
+        for message in self.messages:
+            await message.edit(embed=self.embed)
 
 
 class LogoBuildersCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
         self.guild = bot.get_guild(OSU_LOGO_BUILDERS)
-        self.bans_channel = bot.get_channel(1139236953968087211)
-        self.lite_moderation_channel = bot.get_channel(1139240735791665152)
-        self.everything_channel = bot.get_channel(1139241038456815686)
-        self.last_message_delete_entry: discord.AuditLogAction.message_delete = None
-        self.last_message_delete_message: discord.Message = None
+        self.test_channel = bot.get_channel(1139543003946549338)
+        is_isabel = bot.user.id == ISABEL_ID
+        self.bans_channel = bot.get_channel(1139236953968087211) if is_isabel else self.test_channel
+        self.lite_moderation_channel = bot.get_channel(1139240735791665152) if is_isabel else self.test_channel
+        self.everything_channel = bot.get_channel(1139241038456815686) if is_isabel else self.test_channel
+        self.delete_messages_entries: dict[int, tuple[int, int]] = {}  # {entry_id: (message_id, count)}
+        self.role_update_handlers: list[RoleUpdateHandler] = []
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
@@ -99,6 +169,7 @@ class LogoBuildersCog(commands.Cog):
             await self.lite_moderation_channel.send(embed=embed)
         # on_member_update (nick)
         elif entry.action == discord.AuditLogAction.member_update and hasattr(entry.after, 'nick'):
+            return  # TODO: remove (only used for testing)
             their = 'their' if entry.target == entry.user else f"{entry.target.mention}'s"
             actioned = "changed" if entry.before.nick else "set"
             actioned = actioned if entry.after.nick else "removed"
@@ -118,49 +189,63 @@ class LogoBuildersCog(commands.Cog):
                 await self.lite_moderation_channel.send(embed=embed)
         # on_member_update (roles)
         elif entry.action == discord.AuditLogAction.member_role_update:
-            # TODO: check if this event is only fired once on entry creation
-            their = 'their' if entry.target == entry.user else f"{entry.target.mention}'s"
-            embed = discord.Embed(
-                description=f"👥 {entry.user.mention} changed {their} roles",
-                color=discord.Color.lighter_grey()
-            )
-            if len(entry.before.roles) > len(entry.after.roles):
-                embed.add_field(
-                    name="🚮 Removed",
-                    value=', '.join(r.mention for r in entry.before.roles if r not in entry.after.roles)
-                )
-            if len(entry.before.roles) < len(entry.after.roles):
-                embed.add_field(
-                    name="⚙️ Added",
-                    value=', '.join(r.mention for r in entry.after.roles if r not in entry.before.roles)
-                )
-            embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
-            await self.everything_channel.send(embed=embed)
+            # even though this appears as one entry in the audit log, API treats it as multiple entries
+            for ruh in self.role_update_handlers:
+                if ruh.user == entry.user and ruh.target == entry.target:
+                    await ruh.update(entry)
+                    return # RoleUpdateHandler handles editing the messages
+
+            self.role_update_handlers = self.role_update_handlers[-5:] # only keep the last 5
+
+            ruh = RoleUpdateHandler(entry)
+            self.role_update_handlers.append(ruh)
+            messages = [await self.everything_channel.send(embed=ruh.embed)]
+
             if entry.target != entry.user:
                 if entry.user.bot:
                     return  # don't log automated role changes in the lite moderation channel
-                await self.lite_moderation_channel.send(embed=embed)
+                messages.append(await self.lite_moderation_channel.send(embed=ruh.embed))
+            ruh.messages = messages
+
         # on_message_delete
         elif entry.action == discord.AuditLogAction.message_delete:
-            # TODO: check if this event is only fired once on entry creation
-            channel = self.bot.get_channel(entry.extra.channel.id)
-            embed = discord.Embed(
-                description=f"❌ {entry.user.mention} deleted <@{entry.target.id}>'s messages in {channel.mention}",
-                color=discord.Color.dark_red()
-            )
-            embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
-            await self.lite_moderation_channel.send(embed=embed)
+            embed = get_message_delete_embed(entry)
+            message = await self.lite_moderation_channel.send(embed=embed)
+            self.delete_messages_entries[entry.id] = (message.id, entry.extra.count)
         # on_bulk_message_delete
         elif entry.action == discord.AuditLogAction.message_bulk_delete:
-            channel = self.bot.get_channel(entry.extra.channel.id)
             embed = discord.Embed(
-                description=f"❌ {entry.user.mention} deleted {entry.extra.count} messages in {channel.mention}",
+                description=f"❌ {entry.user.mention} deleted {entry.extra.count} messages in <#{entry.target.id}>",
                 color=discord.Color.dark_red()
             )
             # pretty sure this is bot only endpoint, so they should always add a reason
             embed.add_field(name="Reason" if entry.reason else "No reason provided", value=entry.reason or "\u200b")
             embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
             await self.lite_moderation_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_raw_message_delete(self, _):
+        not_found_ids = list(self.delete_messages_entries.keys())
+        async for entry in self.guild.audit_logs(
+            limit=20,
+            action=discord.AuditLogAction.message_delete,
+        ):
+            if entry.id not in self.delete_messages_entries:
+                continue
+
+            not_found_ids.remove(entry.id)
+
+            message_id, count = self.delete_messages_entries[entry.id]
+            if count == entry.extra.count:
+                continue
+
+            embed = get_message_delete_embed(entry)
+            message = discord.PartialMessage(channel=self.lite_moderation_channel, id=message_id)
+            await message.edit(embed=embed)
+            self.delete_messages_entries[entry.id] = (message_id, entry.extra.count)
+
+        for i in not_found_ids:
+            del self.delete_messages_entries[i]
 
 
 async def setup(bot: 'Isabel'):
