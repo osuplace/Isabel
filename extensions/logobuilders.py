@@ -13,8 +13,9 @@ ISABEL_ID = 1134144074987864186
 
 def get_message_delete_embed(entry: discord.AuditLogEntry):
     channel = f"<#{entry.extra.channel.id}>"
+    messages = f"{entry.extra.count} messages" if entry.extra.count > 1 else "a message"
     embed = discord.Embed(
-        description=f"❌ {entry.user.mention} deleted {entry.extra.count} <@{entry.target.id}>'s messages in {channel}",
+        description=f"❌ {entry.user.mention} deleted {messages} by <@{entry.target.id}> in {channel}",
         color=discord.Color.dark_red()
     )
     embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
@@ -133,6 +134,7 @@ class LogoBuildersCog(commands.Cog):
                 content = None if entry.reason else f"@silent {entry.user.mention} please provide a reason in this channel"
             else:
                 # TODO: is this triggered automatically when the timeout expires? if so, what is entry.user?
+                # TODO: does this combine if done fast enough and no new entry is created?
                 embed = discord.Embed(
                     description=f"🏃 {entry.user.mention} removed {entry.target.mention}'s timeout",
                     color=discord.Color.light_gray()
