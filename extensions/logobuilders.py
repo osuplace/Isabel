@@ -231,7 +231,7 @@ class LogoBuildersCog(commands.Cog):
             limit=20,
             action=discord.AuditLogAction.message_delete,
         ):
-            if entry.id not in self.delete_messages_entries:
+            if entry.id not in not_found_ids:
                 continue
 
             not_found_ids.remove(entry.id)
