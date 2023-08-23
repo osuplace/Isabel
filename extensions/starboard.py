@@ -171,7 +171,7 @@ class StarboardCog(commands.Cog):
             for channel_id, message_id in self.star_cache:
                 if message_id < fake_max_age_snowflake():
                     del self.star_cache[(channel_id, message_id)]
-            for channel_id, message_id in self.known_dirty_messages[:]:
+            for channel_id, message_id in list(self.known_dirty_messages):
                 if message_id < fake_max_age_snowflake():
                     self.known_dirty_messages.remove((channel_id, message_id))
             await self.bot.database.commit()
