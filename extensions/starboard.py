@@ -168,7 +168,7 @@ class StarboardCog(commands.Cog):
                 await cursor.execute("DELETE FROM starboard_reference WHERE original_message_id < ?",
                                      (fake_max_age_snowflake(),))
                 await cursor.execute("DELETE FROM star_givers WHERE message_id < ?", (fake_max_age_snowflake(),))
-            for channel_id, message_id in self.star_cache:
+            for channel_id, message_id in list(self.star_cache.keys()):
                 if message_id < fake_max_age_snowflake():
                     del self.star_cache[(channel_id, message_id)]
             for channel_id, message_id in list(self.known_dirty_messages):
