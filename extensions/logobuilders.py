@@ -119,8 +119,8 @@ class LogoBuildersCog(commands.Cog):
             )
             embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
             embed.add_field(name="Reason" if entry.reason else "No reason provided", value=entry.reason or "\u200b")
-            content = None if entry.reason else f"@silent {entry.user.mention} please provide a reason in this channel"
-            await self.bans_channel.send(content=content, embed=embed)
+            content = None if entry.reason else f"{entry.user.mention} please provide a reason in this channel"
+            await self.bans_channel.send(content=content, embed=embed, silent=True)
         # on_member_update (timed_out_until)
         elif entry.action == discord.AuditLogAction.member_update and hasattr(entry.after, 'timed_out_until'):
             content = None
@@ -131,7 +131,7 @@ class LogoBuildersCog(commands.Cog):
                 )
                 embed.add_field(name="Expires", value=discord.utils.format_dt(entry.after.timed_out_until, style='R'))
                 embed.add_field(name="Reason" if entry.reason else "No reason provided", value=entry.reason or "\u200b")
-                content = None if entry.reason else f"@silent {entry.user.mention} please provide a reason in this channel"
+                content = None if entry.reason else f"{entry.user.mention} please provide a reason in this channel"
             else:
                 # TODO: is this triggered automatically when the timeout expires? if so, what is entry.user?
                 # TODO: does this combine if done fast enough and no new entry is created?
@@ -140,7 +140,7 @@ class LogoBuildersCog(commands.Cog):
                     color=discord.Color.light_gray()
                 )
             embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
-            await self.lite_moderation_channel.send(content=content, embed=embed)
+            await self.lite_moderation_channel.send(content=content, embed=embed, silent=True)
         # on_member_update (mute)
         elif entry.action == discord.AuditLogAction.member_update and hasattr(entry.after, 'mute'):
             if entry.after.mute:
