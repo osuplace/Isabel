@@ -183,7 +183,7 @@ class LogoBuildersCog(commands.Cog):
             if getattr(entry.after, 'nick', None):
                 embed.add_field(name="After", value=entry.after.nick)
             embed.set_author(name=entry.user, icon_url=entry.user.avatar.url)
-            embed.set_footer(text=f"Their global username: {entry.after.global_name}")
+            embed.set_footer(text=f"Their global username: {entry.target.global_name}")
             await self.everything_channel.send(embed=embed)
             if entry.target != entry.user:
                 if entry.user.bot:
