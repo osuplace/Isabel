@@ -78,7 +78,7 @@ class ModerationCog(commands.Cog):
     async def avatar(self, interaction: discord.Interaction, user: discord.User = None):
         user = user or interaction.user
         embed = discord.Embed(description=f"# {user.mention}'s Avatar")
-        embed.set_image(url=user.avatar.url)
+        embed.set_thumbnail(url=user.avatar.url)
         embed.add_field(name="Avatar URL", value=user.avatar.url)
 
         embeds = [embed]
@@ -87,7 +87,7 @@ class ModerationCog(commands.Cog):
             if member := interaction.guild.get_member(user.id):
                 if member.guild_avatar:
                     embed = discord.Embed(description=f"# {member.mention}'s Server Avatar")
-                    embed.set_image(url=member.guild_avatar.url)
+                    embed.set_thumbnail(url=member.guild_avatar.url)
                     embed.add_field(name="Avatar URL", value=member.guild_avatar.url)
                     embeds.append(embed)
 
