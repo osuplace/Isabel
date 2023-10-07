@@ -411,9 +411,10 @@ class StarboardCog(commands.Cog):
             if starboard_message is not None:
                 partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
                                                          id=starboard_message[0])
-                kwargs = await self.make_starboard_message_kwargs(message,
-                                                                  self.star_cache[
-                                                                      (message.channel.id, message.id)].stars)
+                kwargs = await self.make_starboard_message_kwargs(
+                    message,
+                    self.star_cache[(message.channel.id, message.id)].stars
+                )
                 await partial_message.edit(**kwargs)
             else:
                 await self.check_promotion(message)
