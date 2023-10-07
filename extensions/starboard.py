@@ -3,8 +3,10 @@ import contextlib
 import datetime
 import math
 import re
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Set, Union
 
+import aiohttp
 import aiosqlite
 import discord
 from discord import app_commands
@@ -28,6 +30,7 @@ VALID_IMAGE_EXTENSIONS = ('png', 'jpg', 'jpeg', 'gif', 'webp')
 IMAGE_URL_REGEX = re.compile(r'(?:\|\|)?<?(https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
     VALID_IMAGE_EXTENSIONS
 ) + r')(?:\?[^#]+)?(?:#[^#]+)?)>?(?:\|\|)?', re.IGNORECASE)
+TENOR_VIEW_REGEX = re.compile(r'https://tenor.com/view/[^/]+-([0-9]+)')
 
 
 def fake_max_promotion_snowflake():
@@ -142,11 +145,15 @@ class StarboardCog(commands.Cog):
         self.star_cache: Dict[Tuple[int, int], StarredMessage] = starred_messages
         self.known_dirty_messages: Set[Tuple[int, int]] = set()  # channel_id, message_id
         self.promoted_messages: List[int] = []
+        self.session = aiohttp.ClientSession()
+        self.session.headers['User-Agent'] = self.bot.http.user_agent
+        self.tenor_cache: OrderedDict[str, str] = OrderedDict()
 
         self.hourly.start()
 
-    def cog_unload(self) -> None:
+    async def cog_unload(self) -> None:
         self.hourly.cancel()
+        await self.session.close()
 
     @tasks.loop(hours=1, reconnect=True)
     async def hourly(self):
@@ -176,7 +183,7 @@ class StarboardCog(commands.Cog):
                     self.known_dirty_messages.remove((channel_id, message_id))
             await self.bot.database.commit()
 
-    def make_starboard_message_kwargs(self, message: discord.Message, stars: int) -> Dict:
+    async def make_starboard_message_kwargs(self, message: discord.Message, stars: int) -> Dict:
         """
         Makes the kwargs for a starboard message to be used in `discord.TextChannel.send` or `discord.Message.edit`
         """
@@ -215,6 +222,30 @@ class StarboardCog(commands.Cog):
         )
         # finally add all valid stickers (there should only be one but just in case)
         valid_for_image_attachments.extend(sticker.url for sticker in message.stickers)
+
+        if 'tenor_key' in self.bot.config:
+            for tenor in TENOR_VIEW_REGEX.finditer(message.content):
+                tenor_id = tenor[1]
+                if tenor_id in self.tenor_cache:
+                    valid_for_image_attachments.append(self.tenor_cache[tenor_id])
+                    continue
+                async with self.session.get(
+                        "https://tenor.googleapis.com/v2/posts",
+                        params={
+                            'ids': tenor_id,
+                            'key': self.bot.config['tenor_key'],
+                            'media_filter': 'gif,tinygif'
+                        }
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data['results']:
+                            gif_size = data['results'][0]['media_formats']['gif']['size']
+                            _format = 'gif' if gif_size < 1000000 else 'tinygif'  # 1MB?
+                            valid_for_image_attachments.append(data['results'][0]['media_formats'][_format]['url'])
+                            self.tenor_cache[tenor_id] = data['results'][0]['media_formats'][_format]['url']
+                            if len(self.tenor_cache) > 100:
+                                self.tenor_cache.popitem(last=False)
 
         if valid_for_image_attachments:
             embed.set_image(url=valid_for_image_attachments[0])
@@ -315,7 +346,7 @@ class StarboardCog(commands.Cog):
         self.bot.logger.debug(f"Promoting message {message.id} in channel {message.channel.id}")
         if message.id < fake_max_promotion_snowflake():
             return  # ignore old messages
-        starred = await self.starboards[message.guild].send(**self.make_starboard_message_kwargs(message, stars))
+        starred = await self.starboards[message.guild].send(**await self.make_starboard_message_kwargs(message, stars))
         await starred.add_reaction(STAR_EMOJI)
         async with self.bot.database.cursor() as cursor:
             query = """
@@ -380,8 +411,9 @@ class StarboardCog(commands.Cog):
             if starboard_message is not None:
                 partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
                                                          id=starboard_message[0])
-                kwargs = self.make_starboard_message_kwargs(message,
-                                                            self.star_cache[(message.channel.id, message.id)].stars)
+                kwargs = await self.make_starboard_message_kwargs(message,
+                                                                  self.star_cache[
+                                                                      (message.channel.id, message.id)].stars)
                 await partial_message.edit(**kwargs)
             else:
                 await self.check_promotion(message)
