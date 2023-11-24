@@ -124,6 +124,10 @@ class ModerationCog(commands.Cog):
         embed = add_permissions_fields_to(embed, user.guild_permissions)
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(description="Sends relative timestamp as a message")
+    async def now(self, interaction: discord.Interaction):
+        await interaction.response.send_message(discord.utils.format_dt(discord.utils.utcnow(), style="R"))
+
 
 async def setup(bot):
     await bot.add_cog(ModerationCog(bot))
