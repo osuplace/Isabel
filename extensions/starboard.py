@@ -12,6 +12,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+import helper
+
 if TYPE_CHECKING:
     from main import Isabel
 
@@ -146,7 +148,7 @@ class StarboardCog(commands.Cog):
         self.known_dirty_messages: Set[Tuple[int, int]] = set()  # channel_id, message_id
         self.promoted_messages: List[int] = []
         self.session = aiohttp.ClientSession()
-        self.session.headers['User-Agent'] = self.bot.http.user_agent
+        self.session.headers.update({'User-Agent': helper.use().get_user_agent(bot)})
         self.tenor_cache: OrderedDict[str, str] = OrderedDict()
 
         self.hourly.start()

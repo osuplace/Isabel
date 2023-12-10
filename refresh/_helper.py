@@ -118,6 +118,10 @@ def reaction_to_number(reaction: str):
         return -1
 
 
+def get_user_agent(bot):
+    return f"Isabel (https://github.com/osuplace/Isabel) {bot.http.user_agent}"
+
+
 def find_my_emoji(bot, name: str) -> discord.Emoji:
     return discord.utils.get(discord.utils.get(bot.guilds, owner=bot.user).emojis, name=name)
 
