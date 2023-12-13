@@ -77,7 +77,7 @@ class NotFoundHandler(HandlerMeta):
         try:
             logger = ctx.bot.commands_logger
         except AttributeError:
-            logger = logging.getLogger('quelle.commands')
+            logger = logging.getLogger('commands')
             ch = RotatingFileHandler("logs/commands.log", maxBytes=5000000, backupCount=1, encoding='UTF-8')
             ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)-8s [%(name)s] %(message)s'))
             ch.setLevel(1)
