@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import discord
 from discord.ext import commands
@@ -9,8 +9,6 @@ if TYPE_CHECKING:
 
 OSU_LOGO_BUILDERS = 297657542572507137
 ISABEL_ID = 1134144074987864186
-TEMPLATE_ISSUES_CHANNEL = 1185520392027263027
-TEMPLATE_MANAGER = 1165042524566601819
 
 
 def get_message_delete_embed(entry: discord.AuditLogEntry):
@@ -84,8 +82,6 @@ class LogoBuildersCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
         self.guild = bot.get_guild(OSU_LOGO_BUILDERS)
-
-        # audit log channels
         self.test_channel = bot.get_channel(1139543003946549338)
         is_isabel = bot.user.id == ISABEL_ID
         self.bans_channel = bot.get_channel(1139236953968087211) if is_isabel else self.test_channel
@@ -93,10 +89,6 @@ class LogoBuildersCog(commands.Cog):
         self.everything_channel = bot.get_channel(1139241038456815686) if is_isabel else self.test_channel
         self.delete_messages_entries: dict[int, tuple[int, int]] = {}  # {entry_id: (message_id, count)}
         self.role_update_handlers: list[RoleUpdateHandler] = []
-
-        # template issues
-        self.template_issues_channel = bot.get_channel(TEMPLATE_ISSUES_CHANNEL)
-        self.template_manager_role = self.guild.get_role(TEMPLATE_MANAGER)
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
@@ -203,9 +195,9 @@ class LogoBuildersCog(commands.Cog):
             for ruh in self.role_update_handlers:
                 if ruh.user == entry.user and ruh.target == entry.target:
                     await ruh.update(entry)
-                    return  # RoleUpdateHandler handles editing the messages
+                    return # RoleUpdateHandler handles editing the messages
 
-            self.role_update_handlers = self.role_update_handlers[-5:]  # only keep the last 5
+            self.role_update_handlers = self.role_update_handlers[-5:] # only keep the last 5
 
             ruh = RoleUpdateHandler(entry)
             self.role_update_handlers.append(ruh)
@@ -237,8 +229,8 @@ class LogoBuildersCog(commands.Cog):
     async def on_raw_message_delete(self, _):
         not_found_ids = list(self.delete_messages_entries.keys())
         async for entry in self.guild.audit_logs(
-                limit=20,
-                action=discord.AuditLogAction.message_delete,
+            limit=20,
+            action=discord.AuditLogAction.message_delete,
         ):
             if entry.id not in not_found_ids:
                 continue
@@ -256,14 +248,6 @@ class LogoBuildersCog(commands.Cog):
 
         for i in not_found_ids:
             del self.delete_messages_entries[i]
-
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
-        if reaction.message.channel != self.template_issues_channel:
-            return
-        member = self.guild.get_member(user.id)
-        if self.template_manager_role not in member.roles:
-            await reaction.remove(user)
 
 
 async def setup(bot: 'Isabel'):
