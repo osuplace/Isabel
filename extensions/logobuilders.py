@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 OSU_LOGO_BUILDERS = 297657542572507137
 ISABEL_ID = 1134144074987864186
-TEMPLATE_ISSUES_CHANNEL_ID = 1185520392027263027
+TEMPLATE_ISSUES_CHANNEL_ID = 1185520392027263027 # TODO: this should be a list of channels, even if hard coded
 
 
 def get_message_delete_embed(entry: discord.AuditLogEntry):
