@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -9,6 +10,7 @@ if TYPE_CHECKING:
 
 OSU_LOGO_BUILDERS = 297657542572507137
 ISABEL_ID = 1134144074987864186
+TEMPLATE_ISSUES_CHANNEL_ID = 1185520392027263027
 
 
 def get_message_delete_embed(entry: discord.AuditLogEntry):
@@ -212,7 +214,9 @@ class LogoBuildersCog(commands.Cog):
         # on_message_delete
         elif entry.action == discord.AuditLogAction.message_delete:
             embed = get_message_delete_embed(entry)
-            message = await self.lite_moderation_channel.send(embed=embed)
+            is_temp = entry.extra.channel.id == TEMPLATE_ISSUES_CHANNEL_ID
+            channel = self.everything_channel if is_temp else self.lite_moderation_channel
+            message = await channel.send(embed=embed)
             self.delete_messages_entries[entry.id] = (message.id, entry.extra.count)
         # on_bulk_message_delete
         elif entry.action == discord.AuditLogAction.message_bulk_delete:
@@ -242,10 +246,12 @@ class LogoBuildersCog(commands.Cog):
                 continue
 
             embed = get_message_delete_embed(entry)
-            message = discord.PartialMessage(channel=self.lite_moderation_channel, id=message_id)
-            await message.edit(embed=embed)
-            self.delete_messages_entries[entry.id] = (message_id, entry.extra.count)
-
+            is_temp = entry.extra.channel.id == TEMPLATE_ISSUES_CHANNEL_ID
+            channel = self.everything_channel if is_temp else self.lite_moderation_channel
+            message = discord.PartialMessage(channel=channel, id=message_id)
+            with contextlib.suppress(discord.HTTPException): # for messages that can't be edited for whatever reason
+                await message.edit(embed=embed)
+                self.delete_messages_entries[entry.id] = (message_id, entry.extra.count)
         for i in not_found_ids:
             del self.delete_messages_entries[i]
 
