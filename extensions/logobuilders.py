@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 OSU_LOGO_BUILDERS = 297657542572507137
 ISABEL_ID = 1134144074987864186
-TEMPLATE_ISSUES_CHANNEL_ID = 1185520392027263027 # TODO: this should be a list of channels, even if hard coded
+IGNORE_MESSAGE_DELETIONS = (1185520392027263027, 1165042770633826384)
 
 
 def get_message_delete_embed(entry: discord.AuditLogEntry):
@@ -214,7 +214,7 @@ class LogoBuildersCog(commands.Cog):
         # on_message_delete
         elif entry.action == discord.AuditLogAction.message_delete:
             embed = get_message_delete_embed(entry)
-            is_temp = entry.extra.channel.id == TEMPLATE_ISSUES_CHANNEL_ID
+            is_temp = entry.extra.channel.id in IGNORE_MESSAGE_DELETIONS
             channel = self.everything_channel if is_temp else self.lite_moderation_channel
             message = await channel.send(embed=embed)
             self.delete_messages_entries[entry.id] = (message.id, entry.extra.count)
@@ -246,7 +246,7 @@ class LogoBuildersCog(commands.Cog):
                 continue
 
             embed = get_message_delete_embed(entry)
-            is_temp = entry.extra.channel.id == TEMPLATE_ISSUES_CHANNEL_ID
+            is_temp = entry.extra.channel.id in IGNORE_MESSAGE_DELETIONS
             channel = self.everything_channel if is_temp else self.lite_moderation_channel
             message = discord.PartialMessage(channel=channel, id=message_id)
             with contextlib.suppress(discord.HTTPException): # for messages that can't be edited for whatever reason
