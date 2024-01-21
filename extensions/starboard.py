@@ -150,6 +150,7 @@ class StarboardCog(commands.Cog):
         self.session = aiohttp.ClientSession()
         self.session.headers.update({'User-Agent': helper.use().get_user_agent(bot)})
         self.tenor_cache: OrderedDict[str, str] = OrderedDict()
+        self.promotion_lock = asyncio.Lock()
 
         self.hourly.start()
 
@@ -403,23 +404,24 @@ class StarboardCog(commands.Cog):
                 star_cache.decrement()
 
         async with self.bot.database.cursor() as cursor:
-            query = """
-            SELECT starboard_message_id, starboard_channel_id
-            FROM starboard_reference
-            WHERE original_message_id = ? AND original_channel_id = ?
-            """
-            await cursor.execute(query, (message.id, message.channel.id))
-            starboard_message = await cursor.fetchone()
-            if starboard_message is not None:
-                partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
-                                                         id=starboard_message[0])
-                kwargs = await self.make_starboard_message_kwargs(
-                    message,
-                    self.star_cache[(message.channel.id, message.id)].stars
-                )
-                await partial_message.edit(**kwargs)
-            else:
-                await self.check_promotion(message)
+            async with self.promotion_lock:
+                query = """
+                SELECT starboard_message_id, starboard_channel_id
+                FROM starboard_reference
+                WHERE original_message_id = ? AND original_channel_id = ?
+                """
+                await cursor.execute(query, (message.id, message.channel.id))
+                starboard_message = await cursor.fetchone()
+                if starboard_message is not None:
+                    partial_message = discord.PartialMessage(channel=self.bot.get_channel(starboard_message[1]),
+                                                             id=starboard_message[0])
+                    kwargs = await self.make_starboard_message_kwargs(
+                        message,
+                        self.star_cache[(message.channel.id, message.id)].stars
+                    )
+                    await partial_message.edit(**kwargs)
+                else:
+                    await self.check_promotion(message)
 
     async def star(self, giver: discord.Member, message: discord.Message):
         self.bot.logger.debug(f"Starred message {message.id} in channel {message.channel.id}")

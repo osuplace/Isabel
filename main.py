@@ -39,6 +39,9 @@ class Isabel(commands.Bot):
         self.logger = logging.getLogger('isabel')
         formatter = logging.Formatter('%(asctime)s %(levelname)-8s [%(name)s] %(message)s')
 
+        ih = RotatingFileHandler("logs/isabel.log", maxBytes=2000000, backupCount=1, encoding='UTF-8')
+        ih.setLevel(1)
+        ih.setFormatter(formatter)
         fh = RotatingFileHandler("logs/info.log", maxBytes=1000000, backupCount=1, encoding='UTF-8')
         fh.setLevel(logging.INFO)
         fh.setFormatter(formatter)
@@ -49,6 +52,7 @@ class Isabel(commands.Bot):
         sh.setLevel(logging.INFO)
         sh.setFormatter(formatter)
 
+        self.logger.addHandler(ih)
         root_logger.handlers = []
         root_logger.addHandler(fh)
         root_logger.addHandler(dh)
