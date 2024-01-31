@@ -214,7 +214,7 @@ class StarboardCog(commands.Cog):
         valid_for_image_attachments: List[str] = [
             attachment.url
             for attachment in message.attachments
-            if attachment.filename.endswith(valid_extensions) and not attachment.is_spoiler()
+            if attachment.filename.lower().endswith(valid_extensions) and not attachment.is_spoiler()
         ]
         # add all valid image URLs that are not spoilers (whole match and group 1 are the same)
         # group 1 is the URL without the <> or || so if group 1 is different from the whole match, the URL is a spoiler
