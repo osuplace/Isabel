@@ -81,11 +81,7 @@ class AppErrorCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
         self.handlers: List[HandlerMeta] = []
-
-        # jank
-        global isabel
-        isabel = bot
-        bot.tree.on_error = self.handle
+        bot.tree.error(self.handle)
 
     def add_handler(self, handler: HandlerMeta):
         if not isinstance(handler, HandlerMeta):
