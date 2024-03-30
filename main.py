@@ -80,6 +80,15 @@ class Isabel(commands.Bot):
         self.get_cog('Core').cog_unload = None
         await super().close()
 
+    async def setup_hook(self) -> None:
+        async def setup_ready_once():
+            await self.wait_until_ready()
+            for ext in self.auto_load():
+                await self.load_extension(f'extensions.{ext}')
+
+        # noinspection PyAsyncCall, create_task-is-syncronous...
+        asyncio.create_task(setup_ready_once())
+
 
 async def main():
     import core_cog
@@ -87,8 +96,6 @@ async def main():
     isabel = Isabel()
     async with isabel:
         await isabel.add_cog(core_cog.use().Core(isabel))
-        for ext in isabel.auto_load():
-            await isabel.load_extension(f'extensions.{ext}')
         await isabel.start(isabel.config.get('token'))
 
 
