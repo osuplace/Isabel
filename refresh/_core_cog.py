@@ -89,11 +89,11 @@ class Core(commands.Cog):
     @owner_or_cooldown()
     async def _latency(self, ctx):
         """Reports bot latency"""
-        if ctx.invoked_with == 'ping':
+        if ctx.invoked_with.lower() == 'ping':
             msg = await ctx.send("Pong")
-        elif ctx.invoked_with == 'marco':
+        elif ctx.invoked_with.lower() == 'marco':
             msg = await ctx.send("Polo")
-        elif ctx.invoked_with in ['hello', 'hi', 'hey']:
+        elif ctx.invoked_with.lower() in ['hello', 'hi', 'hey']:
             msg = await ctx.send("Hey")
         else:
             msg = await ctx.send("\U0001f4e1")
