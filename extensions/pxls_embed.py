@@ -18,18 +18,17 @@ class PxlsEmbedCog(commands.Cog):
         self.bot: 'Isabel' = bot
         self.channels = channels
 
-
     @staticmethod
     def embed(url):
         params = urllib.parse.parse_qs(urllib.parse.urlparse(url).fragment)
         title = params.get('title', ['Template'])[0]
         if template := params.get('template', [''])[0]:
+            # TODO: template image might be stylized, so we need to fetch the image and remove the style
             escaped = urllib.parse.unquote(template)
             embed = discord.Embed(title=title, url=url)
             embed.set_image(url=escaped)
             return embed
         return None
-
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -44,7 +43,6 @@ class PxlsEmbedCog(commands.Cog):
                 embeds.append(e)
         if embeds:
             await message.reply(embeds=embeds, mention_author=False)
-
 
     @app_commands.command(description="Will start embedding pxls links in this channel", name="pxembed")
     @app_commands.checks.has_permissions(manage_guild=True)
