@@ -42,7 +42,10 @@ class AntiLinksCog(commands.Cog):
         if guild is None:
             return
         for channel in guild.text_channels:
-            async for message in channel.history(limit=100, after=discord.utils.utcnow() - datetime.timedelta(days=7)):
+            async for message in channel.history(
+                    limit=100,
+                    after=discord.utils.utcnow() - datetime.timedelta(days=7),
+                    oldest_first=False):
                 self.counters.setdefault(message.author.id, MessageCounter()).add_message(message)
 
     @commands.Cog.listener()
