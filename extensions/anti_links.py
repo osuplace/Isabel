@@ -2,7 +2,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from main import Isabel
@@ -33,7 +33,9 @@ class AntiLinksCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
         self.counters = {}
+        self.load_channels.start()
 
+    @tasks.loop(count=1)
     async def load_channels(self):
         await self.bot.wait_until_ready()
         guild = self.bot.get_guild(LOGO_BUILDERS_ID)
@@ -68,5 +70,4 @@ class AntiLinksCog(commands.Cog):
 
 async def setup(bot: 'Isabel'):
     alc = AntiLinksCog(bot)
-    await alc.load_channels()
     await bot.add_cog(alc)
