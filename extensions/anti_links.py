@@ -1,4 +1,6 @@
 import datetime
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import discord
@@ -32,21 +34,27 @@ class MessageCounter:
 class AntiLinksCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
-        self.counters = {}
-        self.load_channels.start()
+        self.counters: dict[int, MessageCounter] = {}
+        self.save_to_json_task.start()
+        if Path("anti_links.json").exists():
+            with open("anti_links.json", "r") as f:
+                data = json.load(f)
+                now = discord.utils.time_snowflake(discord.utils.utcnow())
+                for user_id in data:
+                    self.counters[int(user_id)] = MessageCounter()
+                    self.counters[int(user_id)].messages = [now] * MESSAGE_LIMIT
 
-    @tasks.loop(count=1)
-    async def load_channels(self):
-        await self.bot.wait_until_ready()
-        guild = self.bot.get_guild(LOGO_BUILDERS_ID)
-        if guild is None:
-            return
-        for channel in guild.text_channels:
-            async for message in channel.history(
-                    limit=100,
-                    after=discord.utils.utcnow() - datetime.timedelta(days=7),
-                    oldest_first=False):
-                self.counters.setdefault(message.author.id, MessageCounter()).add_message(message)
+    def cog_unload(self):
+        self.save_to_json_task.cancel()
+        self.save_to_json()
+
+    @tasks.loop(hours=1)
+    async def save_to_json_task(self):
+        self.save_to_json()
+
+    def save_to_json(self):
+        with open("anti_links.json", "w") as f:
+            json.dump([str(k) for k, v in self.counters.items() if len(v.messages) == MESSAGE_LIMIT], f)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
