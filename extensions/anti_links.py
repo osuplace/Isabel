@@ -60,6 +60,8 @@ class AntiLinksCog(commands.Cog):
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
+        if not message.guild:
+            return
         if message.guild.id != LOGO_BUILDERS_ID:
             return
         if message.author.guild_permissions.manage_messages:
