@@ -59,14 +59,19 @@ class AntiLinksCog(commands.Cog):
 
         self.counters.setdefault(message.author.id, MessageCounter()).clear_old_messages()
         not_active = len(self.counters.get(message.author.id, [])) < MESSAGE_LIMIT
+        missing = MESSAGE_LIMIT - len(self.counters.get(message.author.id, []))
+        messages = "messages" if missing != 1 else "message"
 
         if any(link in message.content for link in LINKS) and not_active:
             await message.delete()
-            await message.channel.send(f"{message.author.mention}, you are not high enough level to send links here.")
-            # that's a joke, we don't actually have levels
+            await message.channel.send(
+                f"{message.author.mention}, you must send {missing} more {messages} before you can send links."
+            )
         elif (message.attachments or message.embeds) and not_active:
             await message.delete()
-            await message.channel.send(f"{message.author.mention}, you are not high enough level to send files here.")
+            await message.channel.send(
+                f"{message.author.mention}, you must send {missing} more {messages} before you can send files."
+            )
         else:
             self.counters.setdefault(message.author.id, MessageCounter()).add_message(message)
 
