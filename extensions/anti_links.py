@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import datetime
 import json
 from pathlib import Path
@@ -12,6 +14,7 @@ if TYPE_CHECKING:
 LINKS = ["discord.gg/", "discord.com/invite/", "http://", "https://"]
 MESSAGE_LIMIT = 3
 LOGO_BUILDERS_ID = 297657542572507137
+ROLE_ID = 1230732817550278686
 
 
 class MessageCounter:
@@ -35,7 +38,7 @@ class AntiLinksCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
         self.counters: dict[int, MessageCounter] = {}
-        self.save_to_json_task.start()
+
         if Path("anti_links.json").exists():
             with open("anti_links.json", "r") as f:
                 data = json.load(f)
@@ -44,12 +47,27 @@ class AntiLinksCog(commands.Cog):
                     self.counters[int(user_id)] = MessageCounter()
                     self.counters[int(user_id)].messages = [now] * MESSAGE_LIMIT
 
+        self.hourly.start()
+
     def cog_unload(self):
-        self.save_to_json_task.cancel()
+        self.hourly.cancel()
         self.save_to_json()
 
     @tasks.loop(hours=1)
-    async def save_to_json_task(self):
+    async def hourly(self):
+        guild = self.bot.get_guild(LOGO_BUILDERS_ID)
+        role = guild.get_role(ROLE_ID)
+        for key in list(self.counters):
+            counter = self.counters[key]
+            counter.clear_old_messages()
+            if not counter.messages:
+                if guild and role:
+                    member = guild.get_member(key)
+                    if member and role in member.roles:
+                        with contextlib.suppress(discord.HTTPException):
+                            await member.remove_roles(role, reason="Not active in chat anymore.")
+                del self.counters[key]
+            await asyncio.sleep(0)
         self.save_to_json()
 
     def save_to_json(self):
@@ -69,21 +87,20 @@ class AntiLinksCog(commands.Cog):
 
         self.counters.setdefault(message.author.id, MessageCounter()).clear_old_messages()
         not_active = len(self.counters.get(message.author.id, [])) < MESSAGE_LIMIT
-        missing = MESSAGE_LIMIT - len(self.counters.get(message.author.id, []))
-        messages = "messages" if missing != 1 else "message"
 
+        # sourcery skip: remove-pass-elif
         if any(link in message.content for link in LINKS) and not_active:
-            await message.delete()
-            await message.channel.send(
-                f"{message.author.mention}, you must send {missing} more {messages} before you can send links."
-            )
+            pass
         elif (message.attachments or message.embeds) and not_active:
-            await message.delete()
-            await message.channel.send(
-                f"{message.author.mention}, you must send {missing} more {messages} before you can send files."
-            )
+            pass
         else:
             self.counters.setdefault(message.author.id, MessageCounter()).add_message(message)
+            if len(self.counters[message.author.id]) == MESSAGE_LIMIT:
+                if guild := self.bot.get_guild(LOGO_BUILDERS_ID):
+                    member = guild.get_member(message.author.id)
+                    role = guild.get_role(ROLE_ID)
+                    if member and role and role not in member.roles:
+                        await member.add_roles(role, reason="Active in chat.")
 
 
 async def setup(bot: 'Isabel'):
