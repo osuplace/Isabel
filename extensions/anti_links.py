@@ -82,6 +82,8 @@ class AntiLinksCog(commands.Cog):
             return
         if message.guild.id != LOGO_BUILDERS_ID:
             return
+        if message.type != discord.MessageType.default:
+            return
 
         self.counters.setdefault(message.author.id, MessageCounter()).clear_old_messages()
         not_active = len(self.counters.get(message.author.id, [])) < MESSAGE_LIMIT
