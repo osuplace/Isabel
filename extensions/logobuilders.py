@@ -1,9 +1,10 @@
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 import discord
 from discord.ext import commands
+from extensions.anti_links import ROLE_ID as PERMITS_LINKS_ROLE_ID
 
 if TYPE_CHECKING:
     from main import Isabel
@@ -193,13 +194,28 @@ class LogoBuildersCog(commands.Cog):
                 await self.lite_moderation_channel.send(embed=embed)
         # on_member_update (roles)
         elif entry.action == discord.AuditLogAction.member_role_update:
+            # special case to not log the links permitting role changes
+            if entry.user.bot:
+                adds_links = all((
+                    len(entry.before.roles) == 0,
+                    len(entry.after.roles) == 1,
+                    entry.after.roles[0].id == PERMITS_LINKS_ROLE_ID,
+                ))
+                removes_links = all((
+                    len(entry.before.roles) == 1,
+                    len(entry.after.roles) == 0,
+                    entry.before.roles[0].id == PERMITS_LINKS_ROLE_ID,
+                ))
+                if adds_links or removes_links:
+                    return
+
             # even though this appears as one entry in the audit log, API treats it as multiple entries
             for ruh in self.role_update_handlers:
                 if ruh.user == entry.user and ruh.target == entry.target:
                     await ruh.update(entry)
-                    return # RoleUpdateHandler handles editing the messages
+                    return  # RoleUpdateHandler handles editing the messages
 
-            self.role_update_handlers = self.role_update_handlers[-5:] # only keep the last 5
+            self.role_update_handlers = self.role_update_handlers[-5:]  # only keep the last 5
 
             ruh = RoleUpdateHandler(entry)
             self.role_update_handlers.append(ruh)
@@ -233,8 +249,8 @@ class LogoBuildersCog(commands.Cog):
     async def on_raw_message_delete(self, _):
         not_found_ids = list(self.delete_messages_entries.keys())
         async for entry in self.guild.audit_logs(
-            limit=20,
-            action=discord.AuditLogAction.message_delete,
+                limit=20,
+                action=discord.AuditLogAction.message_delete,
         ):
             if entry.id not in not_found_ids:
                 continue
@@ -249,7 +265,7 @@ class LogoBuildersCog(commands.Cog):
             is_temp = entry.extra.channel.id in IGNORE_MESSAGE_DELETIONS
             channel = self.everything_channel if is_temp else self.lite_moderation_channel
             message = discord.PartialMessage(channel=channel, id=message_id)
-            with contextlib.suppress(discord.HTTPException): # for messages that can't be edited for whatever reason
+            with contextlib.suppress(discord.HTTPException):  # for messages that can't be edited for whatever reason
                 await message.edit(embed=embed)
                 self.delete_messages_entries[entry.id] = (message_id, entry.extra.count)
         for i in not_found_ids:
