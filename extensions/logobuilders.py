@@ -196,16 +196,10 @@ class LogoBuildersCog(commands.Cog):
         elif entry.action == discord.AuditLogAction.member_role_update:
             # special case to not log the links permitting role changes
             if entry.user.bot:
-                adds_links = all((
-                    len(entry.before.roles) == 0,
-                    len(entry.after.roles) == 1,
-                    entry.after.roles[0].id == PERMITS_LINKS_ROLE_ID,
-                ))
-                removes_links = all((
-                    len(entry.before.roles) == 1,
-                    len(entry.after.roles) == 0,
-                    entry.before.roles[0].id == PERMITS_LINKS_ROLE_ID,
-                ))
+                adds_links = len(entry.before.roles) == 0 and len(entry.after.roles) == 1
+                adds_links = adds_links and entry.after.roles[0].id == PERMITS_LINKS_ROLE_ID
+                removes_links = len(entry.before.roles) == 1 and len(entry.after.roles) == 0
+                removes_links = removes_links and entry.before.roles[0].id == PERMITS_LINKS_ROLE_ID
                 if adds_links or removes_links:
                     return
 
