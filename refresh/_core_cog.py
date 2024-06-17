@@ -85,7 +85,7 @@ class Core(commands.Cog):
                 ctx.re_runner = msg
                 await ctx.reinvoke()
 
-    @commands.command(name='latency', aliases=['ping', 'marco', 'hello', 'hi', 'hey', 'yo'])
+    @commands.command(name='latency', aliases=['ping', 'marco', 'hello', 'hi', 'hey', 'yo', 'meow'])
     @owner_or_cooldown()
     async def _latency(self, ctx):
         """Reports bot latency"""
@@ -95,6 +95,8 @@ class Core(commands.Cog):
             msg = await ctx.send("Polo")
         elif ctx.invoked_with.lower() in ['hello', 'hi', 'hey']:
             msg = await ctx.send("Hey")
+        elif ctx.invoked_with.lower() in ['meow']:
+            msg = await ctx.send("meow :3")
         else:
             msg = await ctx.send("\U0001f4e1")
         latency = msg.created_at.timestamp() - ctx.message.created_at.timestamp()
