@@ -37,8 +37,8 @@ class PxlsEmbedCog(commands.Cog):
         if message.channel not in self.channels:
             return  # ignore channels that are not set up for pxls embeds
         embeds = []
-        for match in PXLS_REGEX.findall(message.content):
-            e = self.embed(match)
+        for match in PXLS_REGEX.finditer(message.content):
+            e = self.embed(match[0])
             if e and len(embeds) < 10:
                 embeds.append(e)
         if embeds:
