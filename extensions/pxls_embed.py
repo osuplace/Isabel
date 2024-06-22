@@ -10,7 +10,7 @@ from discord.ext import commands
 if TYPE_CHECKING:
     from main import Isabel
 
-PXLS_REGEX = re.compile(r"(?:https?://)?(?:www\.)?pxls\.space/#\S+")
+PXLS_REGEX = re.compile(r"(?:https?://)?((?:www\.)?pxls\.space|(?:[a-z0-9\-]+\.)?pxls\.world)/#\S+")
 
 
 class PxlsEmbedCog(commands.Cog):
