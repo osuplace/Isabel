@@ -87,6 +87,7 @@ class LogoBuildersCog(commands.Cog):
         self.guild = bot.get_guild(OSU_LOGO_BUILDERS)
         self.test_channel = bot.get_channel(1139543003946549338)
         is_isabel = bot.user.id == ISABEL_ID
+        self.voice_logs_channel = bot.get_channel(1254072010787651584) if is_isabel else self.test_channel
         self.bans_channel = bot.get_channel(1139236953968087211) if is_isabel else self.test_channel
         self.lite_moderation_channel = bot.get_channel(1139240735791665152) if is_isabel else self.test_channel
         self.everything_channel = bot.get_channel(1139241038456815686) if is_isabel else self.test_channel
@@ -270,6 +271,24 @@ class LogoBuildersCog(commands.Cog):
                 self.delete_messages_entries[entry.id] = (message_id, entry.extra.count)
         for i in not_found_ids:
             del self.delete_messages_entries[i]
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member:discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if before.channel == after.channel:
+            return
+        description = ""
+        if before.channel and not after.channel:
+            description = f"🔇 {member.mention} left {before.channel.mention}"
+        elif not before.channel and after.channel:
+            description = f"🔈 {member.mention} joined {after.channel.mention}"
+        else:
+            description = f"🔄 {member.mention} moved from {before.channel.mention} to {after.channel.mention}"
+        embed = discord.Embed(
+            description=description,
+            color=discord.Color.light_gray()
+        )
+        embed.set_author(name=member, icon_url=member.avatar.url)
+        await self.voice_logs_channel.send(embed=embed)
 
 
 async def setup(bot: 'Isabel'):
