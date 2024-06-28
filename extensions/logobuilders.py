@@ -274,21 +274,44 @@ class LogoBuildersCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member:discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        async def create_embed(description: str):
+            embed = discord.Embed(
+                description=description, color=discord.Color.light_gray()
+            )
+            embed.set_author(name=member, icon_url=member.avatar.url)
+            await self.voice_logs_channel.send(embed=embed)
+
+        if isinstance(after.channel, discord.StageChannel) or isinstance(
+            before.channel, discord.StageChannel
+        ):
+            description = ""
+            if before.suppress == True and after.suppress == False:
+                description = (
+                    f"🔈 {member.mention} started speaking in {after.channel.mention}"
+                )
+                await create_embed(description)
+            elif before.suppress == False and after.suppress == True:
+                description = (
+                    f"🔇 {member.mention} stopped speaking in {before.channel.mention}"
+                )
+                await create_embed(description)
+
+            else:
+                return
+
         if before.channel == after.channel:
             return
+
         description = ""
         if before.channel and not after.channel:
             description = f"🔇 {member.mention} left {before.channel.mention}"
+            await create_embed(description)
         elif not before.channel and after.channel:
             description = f"🔈 {member.mention} joined {after.channel.mention}"
+            await create_embed(description)
         else:
             description = f"🔄 {member.mention} moved from {before.channel.mention} to {after.channel.mention}"
-        embed = discord.Embed(
-            description=description,
-            color=discord.Color.light_gray()
-        )
-        embed.set_author(name=member, icon_url=member.avatar.url)
-        await self.voice_logs_channel.send(embed=embed)
+            await create_embed(description)
 
 
 async def setup(bot: 'Isabel'):
