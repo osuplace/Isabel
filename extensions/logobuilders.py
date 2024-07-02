@@ -272,23 +272,48 @@ class LogoBuildersCog(commands.Cog):
         for i in not_found_ids:
             del self.delete_messages_entries[i]
 
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member:discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        if before.channel == after.channel:
-            return
-        description = ""
-        if before.channel and not after.channel:
-            description = f"🔇 {member.mention} left {before.channel.mention}"
-        elif not before.channel and after.channel:
-            description = f"🔈 {member.mention} joined {after.channel.mention}"
-        else:
-            description = f"🔄 {member.mention} moved from {before.channel.mention} to {after.channel.mention}"
-        embed = discord.Embed(
-            description=description,
-            color=discord.Color.light_gray()
-        )
+    async def send_voice_log(self, member: discord.Member, description: str):
+        embed = discord.Embed(description=description, color=discord.Color.light_gray())
         embed.set_author(name=member, icon_url=member.avatar.url)
         await self.voice_logs_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
+                                    after: discord.VoiceState):
+        if isinstance(after.channel, discord.StageChannel) and before.channel is None:
+            return  # ignore joining stage channels
+        if (
+                isinstance(before.channel, discord.StageChannel)
+                and before.suppress
+                and after.channel is None
+        ):
+            return  # ignore leaving stage channels if not speaking in them
+
+        # TODO: we don't have multiple stage channels, so can't switch between two
+        #  but if we ever do, that needs its own special case
+
+        if (
+                isinstance(before.channel, discord.StageChannel)
+                and isinstance(after.channel, discord.StageChannel)
+                and before.suppress != after.suppress
+        ):
+            if after.suppress:
+                await self.send_voice_log(member, f"🔇 {member.mention} stopped speaking in {after.channel.mention}")
+            else:
+                await self.send_voice_log(member, f"🔈 {member.mention} started speaking in {after.channel.mention}")
+
+        if before.channel == after.channel:
+            return
+
+        if before.channel and not after.channel:
+            await self.send_voice_log(member, f"🔇 {member.mention} left {before.channel.mention}")
+        elif not before.channel and after.channel:
+            await self.send_voice_log(member, f"🔈 {member.mention} joined {after.channel.mention}")
+        else:
+            await self.send_voice_log(
+                member,
+                f"🔄 {member.mention} moved from {before.channel.mention} to {after.channel.mention}"
+            )
 
 
 async def setup(bot: 'Isabel'):
