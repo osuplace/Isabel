@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 def discord_sort(name) -> bool:
-    return name < 'A' or name[0] in '^[]_`'
+    return name < 'A' or name[0] in r'^[]_`\/'
 
 
 class AntiHoistCog(commands.Cog):
