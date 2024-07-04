@@ -419,7 +419,7 @@ class StarboardCog(commands.Cog):
                         message,
                         self.star_cache[(message.channel.id, message.id)].stars
                     )
-                    await partial_message.edit(**kwargs)
+                    await partial_message.edit(**kwargs)  # TODO: debounce this
                 else:
                     await self.check_promotion(message)
 
