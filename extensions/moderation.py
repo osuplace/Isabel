@@ -10,6 +10,10 @@ from discord.ext import commands
 if TYPE_CHECKING:
     from main import Isabel
 
+OSU_LOGO_BUILDERS = 297657542572507137
+
+NORMAL_BAN_FORM = "https://placeholder.com"
+HACKED_ACCOUNT_FORM = "https://placeholder.com"
 
 def add_permissions_fields_to(embed: discord.Embed, permissions: discord.Permissions):
     all_permissions: Dict[str, bool] = {
@@ -34,6 +38,7 @@ def add_permissions_fields_to(embed: discord.Embed, permissions: discord.Permiss
 class ModerationCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
+        self.guild = bot.get_guild(OSU_LOGO_BUILDERS)
 
     @app_commands.command(description="Bulk deletes messages")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -128,6 +133,42 @@ class ModerationCog(commands.Cog):
     async def now(self, interaction: discord.Interaction):
         await interaction.response.send_message(discord.utils.format_dt(discord.utils.utcnow(), style="R"))
 
+    @app_commands.command(description="Bans a user")
+    @app_commands.checks.has_permissions(manage_users=True)
+    @app_commands.checks.bot_has_permissions(manage_users=True)
+    async def ban(self, interaction: discord.Interaction, user: discord.User):
+        embed = discord.Embed(
+            title=f"You have been banned from osu! Logo Builders",
+            description=f"If you would like to appeal this ban please click one of the respective buttons.",
+            colour=0xFF0000,
+        )
+        view = discord.ui.View()
+        view.add_item(
+            discord.ui.Button(
+                label="Regular appeal",
+                style=discord.ButtonStyle.link,
+                url=NORMAL_BAN_FORM,
+            )
+        )
+        view.add_item(
+            discord.ui.Button(
+                label="Hacked account appeal",
+                style=discord.ButtonStyle.link,
+                url=HACKED_ACCOUNT_FORM,
+            )
+        )
+
+        try:
+            await user.send(embed=embed, view=view)
+            await self.guild.ban(user)
+        except Exception:
+            await interaction.response.send_message(
+                "Something went wrong", ephemeral=True
+            )
+
+        await interaction.response.send_message(
+            f"Successfully banned {user.mention}", ephemeral=True
+        )
 
 async def setup(bot):
     await bot.add_cog(ModerationCog(bot))
