@@ -26,6 +26,7 @@ class PxlsEmbedCog(commands.Cog):
             # TODO: template might be stylized, consider unstylizing it
             #  (would need to wait for all images to fetch / uses our bandwidth instead of theirs)
             #  (plus you can't edit in attachments, you need to send them from initial message)
+            #  (above is false, see message.add_files and message.remove_attachment)
             escaped = urllib.parse.unquote(template)
             embed = discord.Embed(title=title, url=url)
             embed.set_image(url=escaped)
