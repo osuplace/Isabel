@@ -81,7 +81,7 @@ class AntiLinksCog(commands.Cog):
             return
         if message.guild.id != LOGO_BUILDERS_ID:
             return
-        if message.type != discord.MessageType.default:
+        if message.type not in (discord.MessageType.default, discord.MessageType.reply):
             return
 
         self.collectors.setdefault(message.author.id, MessageCollection()).clear_old_messages()
