@@ -150,7 +150,6 @@ class EmbedController:
         # send new message
         self.embed_all()
         await self.message.edit(embeds=self.get_embeds(), attachments=list(self.files.values()))
-        await asyncio.sleep(5)
 
 
 class PxlsEmbedCog(commands.Cog):
