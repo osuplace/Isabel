@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 MAX_PROMOTION_SECONDS = 24 * 60 * 60
 MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 STARBOARD_INTERVAL_SECONDS = 60 * 60
-MIN_STARS = 2  # set to 0 for testing  # TODO: raise to 4
+MIN_STARS = 3  # set to 0 for testing  # TODO: this shouldn't be hardcoded
 REQUIREMENTS_UP_MULTIPLIER = 10 / 9
 REQUIREMENTS_DOWN_MULTIPLIER = 19 / 20
 STAR_EMOJI = '⭐'
