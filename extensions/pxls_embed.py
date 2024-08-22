@@ -147,9 +147,10 @@ class EmbedController:
                 logging.exception(exc)
         # remove style
         await asyncio.get_event_loop().run_in_executor(None, self.remove_style_all)
-        # send new message
+        # edit or send new message
         self.embed_all()
         await self.message.edit(embeds=self.get_embeds(), attachments=list(self.files.values()))
+        # TODO: send new message if old message failed to embed (proxy image still has 0x0 size)
 
 
 class PxlsEmbedCog(commands.Cog):
