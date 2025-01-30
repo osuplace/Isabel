@@ -5,7 +5,7 @@ from discord.ext import commands
 
 from extensions.starboard import IMAGE_URL_REGEX
 
-ARTWORK_IDEAS_ID = 1221887700890816583
+CHANNEL_IDS = (1221887700890816583, 1286279551898615971)  # TODO: consider making this a config option
 
 if TYPE_CHECKING:
     from main import Isabel
@@ -17,7 +17,7 @@ class ThreadPerImageCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.channel.id != ARTWORK_IDEAS_ID:
+        if message.channel.id not in CHANNEL_IDS:
             return
 
         has_image_attachment = any(attachment.content_type.startswith("image") for attachment in message.attachments)
