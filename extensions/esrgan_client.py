@@ -35,8 +35,13 @@ class EsrganCog(commands.Cog):
         elif image.content_type == 'image/jpeg':
             'JPEG'
         else:
-            await interaction.response.send_message("Unsupported image format", ephemeral=True)
+            await interaction.response.send_message("Unsupported format", ephemeral=True)
             return
+
+        if image.height > 1000 or image.width > 1000:
+            await interaction.response.send_message("Image is too large (max 1000x1000)", ephemeral=True)
+            return
+
 
         writer.write(await image.read())
         writer.write_eof()
@@ -65,7 +70,7 @@ class EsrganCog(commands.Cog):
         response_file = discord.File(wrapper, filename='output.png')
         await interaction.edit_original_response(content=DISCLAIMER, attachments=[response_file])
         writer.close()
-        if interaction.guild is None or interaction.channel.permissions_for(interaction.guild.me).send_messages:
+        if interaction.guild is None:
             msg = await interaction.original_response()
             await msg.reply(f"{interaction.user.mention} Finished downscaling image")
         else:
