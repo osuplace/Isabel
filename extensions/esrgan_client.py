@@ -65,7 +65,7 @@ class EsrganCog(commands.Cog):
         response_file = discord.File(wrapper, filename='output.png')
         await interaction.edit_original_response(content=DISCLAIMER, attachments=[response_file])
         writer.close()
-        if interaction.channel.permissions_for(interaction.guild.me).send_messages:
+        if interaction.guild is None or interaction.channel.permissions_for(interaction.guild.me).send_messages:
             msg = await interaction.original_response()
             await msg.reply(f"{interaction.user.mention} Finished downscaling image")
         else:
