@@ -445,7 +445,7 @@ class StarboardCog(commands.Cog):
         if stars_increased:
             await self.star_amount_changed(message, True)
 
-    async def unstar(self, giver: discord.Member, message: discord.Message):
+    async def unstar(self, giver: Union[discord.Member, discord.Object], message: discord.Message):
         self.bot.logger.debug(f"Unstarred message {message.id} in channel {message.channel.id}")
         if message.id < fake_max_age_snowflake():
             return  # ignore old messages
@@ -559,7 +559,8 @@ You can change starboard channel or stop the starboard entirely.
         func = self.star if increment else self.unstar
         msg = await self.get_message(channel_id, message_id)
         if msg is not None:
-            await func(giver, msg)
+            # noinspection PyArgumentList
+            await func(giver, msg)  # argument types are correct, see comment below, PyCharm is just silly here
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
