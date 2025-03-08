@@ -123,8 +123,8 @@ class Core(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def sync(self, ctx):
-        await self.bot.tree.sync()
-        await helper.use().report_success(ctx, "Commands synced")
+        commands = await self.bot.tree.sync()
+        await phelp.use().p_send(ctx, f"Synced {len(commands)} commands")
 
     @commands.command(hidden=True)
     @commands.is_owner()
