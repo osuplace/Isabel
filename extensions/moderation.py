@@ -111,7 +111,7 @@ class ModerationCog(commands.Cog):
         embed = add_permissions_fields_to(embed, permissions)
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(description="Gets the permissions someone globally in the server")
+    @app_commands.command(description="Gets the permissions someone globally has in the server")
     async def permsfor(self, interaction: discord.Interaction, user: discord.User = None):
         if not interaction.guild:
             raise app_commands.NoPrivateMessage()
