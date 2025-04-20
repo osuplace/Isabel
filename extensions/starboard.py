@@ -28,10 +28,10 @@ VALID_IMAGE_EXTENSIONS = ('png', 'jpg', 'jpeg', 'gif', 'webp')
 
 # idk where copilot got this regex from but it's a good one
 # https://gist.github.com/LittleEndu/6c7e36b834034b98b800e64a05377ff4
-# noinspection RegExpRedundantEscape
-IMAGE_URL_REGEX = re.compile(r'(?:\|\|)?<?(https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?]+)+\.(?:' + '|'.join(
+# noinspection RegExpRedundantEscape,RegExpUnnecessaryNonCapturingGroup
+IMAGE_URL_REGEX = re.compile(r'(?:\|\|)?<?(https?:\/\/(?:[a-z0-9-]+\.)+[a-z]{2,6}(?:\/[^/#?> \n]+)+\.(?:' + '|'.join(
     VALID_IMAGE_EXTENSIONS
-) + r')(?:\?[^#]+)?(?:#[^#]+)?)>?(?:\|\|)?', re.IGNORECASE)
+) + r')(?:\?[^/#?> \n]+)?(?:#[^/#?> \n]+)?)>?(?:\|\|)?', re.IGNORECASE)
 TENOR_VIEW_REGEX = re.compile(r'https://tenor.com/view/[^/]+-([0-9]+)')
 
 
@@ -218,6 +218,7 @@ class StarboardCog(commands.Cog):
         ]
         # add all valid image URLs that are not spoilers (whole match and group 1 are the same)
         # group 1 is the URL without the <> or || so if group 1 is different from the whole match, the URL is a spoiler
+        # TODO: this fails if entire message is a spoiler
         valid_for_image_attachments.extend(
             match[1]
             for match in IMAGE_URL_REGEX.finditer(message.content)

@@ -21,9 +21,16 @@ class ThreadPerImageCog(commands.Cog):
             return
 
         has_image_attachment = any(attachment.content_type.startswith("image") for attachment in message.attachments)
-        has_image_link = IMAGE_URL_REGEX.search(message.content)
-        if has_image_attachment or has_image_link:
-            await message.create_thread(name=message.content or "Artwork", auto_archive_duration=10080)
+        image_link_found = IMAGE_URL_REGEX.search(message.content)
+        if has_image_attachment or image_link_found:
+            name = message.content or "Artwork"
+            if image_link_found:
+                # remove image link from message content
+                link = image_link_found.group(1)
+                print(f"Found image link: {link}")
+                name = name.replace(link, "").strip()
+            print(f"Creating thread for {message.id} in {message.channel.id} with name:'{name}'")
+            await message.create_thread(name=name[:100], auto_archive_duration=10080)
 
 
 async def setup(bot: 'Isabel'):
