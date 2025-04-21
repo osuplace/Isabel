@@ -27,9 +27,7 @@ class ThreadPerImageCog(commands.Cog):
             if image_link_found:
                 # remove image link from message content
                 link = image_link_found.group(1)
-                print(f"Found image link: {link}")
                 name = name.replace(link, "").strip()
-            print(f"Creating thread for {message.id} in {message.channel.id} with name:'{name}'")
             await message.create_thread(name=name[:100], auto_archive_duration=10080)
 
 
