@@ -13,6 +13,8 @@ class ChannelArchiverCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if not message.guild:
+            return
         config = self.bot.config.get('channel_archiver', {})
         if str(message.guild.id) in config:
             for src, dest in config[str(message.guild.id)]:
