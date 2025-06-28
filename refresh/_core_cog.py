@@ -160,7 +160,7 @@ class Core(commands.Cog):
             self.bot.logger.error(
                 "".join(
                     traceback.format_exception(
-                        type(err), err.__cause__, err.__traceback__
+                        type(err), err, err.__traceback__
                     )
                 )
             )
@@ -178,7 +178,7 @@ class Core(commands.Cog):
             self.bot.logger.error(
                 "".join(
                     traceback.format_exception(
-                        type(err), err.__cause__, err.__traceback__
+                        type(err), err, err.__traceback__
                     )
                 )
             )
