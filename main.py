@@ -23,6 +23,7 @@ class Isabel(commands.Bot):
                          case_insensitive=True,
                          chunk_guilds_at_startup=False,
                          help_command=None,
+                         allowed_mentions=discord.AllowedMentions(everyone=False, users=True, roles=False),
                          intents=_intents)
 
         with open(config_name) as file_in:
