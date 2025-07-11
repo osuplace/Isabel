@@ -78,6 +78,7 @@ class Isabel(commands.Bot):
 
     async def close(self):
         self.get_cog('Core').cog_unload = None
+        del self.get_cog('Core').cog_unload
         await super().close()
 
     async def setup_hook(self) -> None:
