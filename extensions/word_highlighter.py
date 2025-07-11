@@ -23,7 +23,10 @@ class WordHighlighterCog(commands.Cog):
                     continue
                 if message.content and word.lower() in message.content.lower():
                     if channel := self.bot.get_channel(dest):
-                        await channel.send(f"**{message.author.display_name}** ({message.author.id}) mentioned '{word}':")
+                        emb = discord.Embed(
+                            description=f"{message.author.mention} mentioned '{word}':"
+                        )
+                        await channel.send(embed=emb)
                         await message.forward(channel)
 
 

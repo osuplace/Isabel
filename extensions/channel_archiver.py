@@ -20,7 +20,10 @@ class ChannelArchiverCog(commands.Cog):
             for src, dest in config[str(message.guild.id)]:
                 if message.channel.id == src:
                     if channel := self.bot.get_channel(dest):
-                        await channel.send(f"**{message.author.display_name}** ({message.author.id}) had this to say:")
+                        emb = discord.Embed(
+                            description=f"{message.author.mention} had this to say:"
+                        )
+                        await channel.send(embed=emb)
                         await message.forward(channel)
 
 
