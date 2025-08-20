@@ -15,6 +15,7 @@ LINKS = ["discord.gg/", "discord.com/invite/", "http://", "https://"]
 MESSAGE_LIMIT = 3
 LOGO_BUILDERS_ID = 297657542572507137
 ROLE_ID = 1230732817550278686
+TIMEDELTA = datetime.timedelta(days=30)
 
 
 class MessageCollection:
@@ -29,7 +30,7 @@ class MessageCollection:
 
     def clear_old_messages(self):
         now = discord.utils.utcnow()
-        self.messages = [m for m in self.messages if now - discord.utils.snowflake_time(m) < datetime.timedelta(days=7)]
+        self.messages = [m for m in self.messages if now - discord.utils.snowflake_time(m) < TIMEDELTA]
 
     def is_full(self):
         return len(self.messages) == MESSAGE_LIMIT
