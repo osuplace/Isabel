@@ -16,11 +16,11 @@ MESSAGE_LIMIT = 3
 LOGO_BUILDERS_ID = 297657542572507137
 ROLE_ID = 1230732817550278686
 TIMEDELTA = datetime.timedelta(days=30)
-
+TIMEDELTA_WHEN_RESTART = datetime.timedelta(days=7)
 
 class MessageCollection:
     def __init__(self, init_as_full=False):
-        now = discord.utils.time_snowflake(discord.utils.utcnow())
+        now = discord.utils.time_snowflake(discord.utils.utcnow() - (TIMEDELTA - TIMEDELTA_WHEN_RESTART))
         self.messages = [now] * MESSAGE_LIMIT if init_as_full else []
 
     def add_message(self, message: discord.Message):
