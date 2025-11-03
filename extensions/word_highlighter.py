@@ -1,3 +1,4 @@
+import asyncio
 from typing import TYPE_CHECKING
 
 import discord
@@ -10,6 +11,7 @@ if TYPE_CHECKING:
 class WordHighlighterCog(commands.Cog):
     def __init__(self, bot: 'Isabel'):
         self.bot = bot
+        self.lock = asyncio.Lock()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -26,8 +28,9 @@ class WordHighlighterCog(commands.Cog):
                         emb = discord.Embed(
                             description=f"{message.author.mention} mentioned '{word}':"
                         )
-                        await channel.send(embed=emb)
-                        await message.forward(channel)
+                        async with self.lock:
+                            await channel.send(embed=emb)
+                            await message.forward(channel)
 
 
 async def setup(bot: 'Isabel'):
