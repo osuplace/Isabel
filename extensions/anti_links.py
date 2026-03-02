@@ -11,7 +11,7 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from main import Isabel
 
-LINKS = ["discord.gg/", "discord.com/invite/", "http://", "https://"]
+LINKS = ["discord.gg", "discord.com", "discordapp.com", "http://", "https://"]
 MESSAGE_LIMIT = 3
 LOGO_BUILDERS_ID = 297657542572507137
 ROLE_ID = 1230732817550278686
